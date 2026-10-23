@@ -14,15 +14,22 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
     "resources": {
       "../desktop-resources/runtime/": "runtime/"
     },
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
-        "languages": ["Spanish"]
+        "languages": [
+          "Spanish"
+        ],
+        "compression": "zlib"
       }
     }
   }
