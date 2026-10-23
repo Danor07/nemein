@@ -1,0 +1,36 @@
+{
+  "name": "presupuesto-cero",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "cli": "node src/cli.js",
+    "mcp": "node src/mcp.js",
+    "desktop:prepare": "node scripts/prepare-desktop.js",
+    "desktop:dev": "npm run desktop:prepare && tauri dev",
+    "desktop:build": "npm run desktop:prepare && tauri build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "better-sqlite3": "^12.4.1",
+    "chart.js": "^4.5.0",
+    "csv-parse": "^6.1.0",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0",
+    "prettier": "^3.9.10"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
+  },
+  "license": "MIT",
+  "description": "Presupuesto personal local en guaraníes, con interfaz de escritorio, CLI y MCP",
+  "engines": {
+    "node": ">=22"
+  }
+}

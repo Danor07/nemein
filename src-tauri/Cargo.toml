@@ -1,0 +1,13 @@
+[package]
+name = "presupuesto-cero"
+version = "0.1.0"
+description = "Presupuesto personal local en guaraníes"
+authors = ["Presupuesto Cero"]
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

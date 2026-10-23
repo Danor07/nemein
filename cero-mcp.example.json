@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "presupuesto-cero": {
+      "command": "node",
+      "args": ["RUTA_ABSOLUTA_AL_PROYECTO/src/mcp.js"]
+    }
+  }
+}
