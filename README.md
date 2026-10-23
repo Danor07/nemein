@@ -4,6 +4,13 @@ Primera versión pública experimental. Código abierto bajo licencia MIT. Presu
 
 Aplicación de presupuesto base cero en guaraníes enteros. Interfaz de escritorio Tauri 2, servidor Express con páginas EJS, SQLite mediante better-sqlite3 y gráficos Chart.js locales. Sin usuarios, telemetría, credenciales bancarias ni sincronización bancaria.
 
+
+## Descargar para Windows
+
+La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/presupuesto-cero/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador todavía no tiene firma digital.
+
+Los archivos de la release incluyen `SHA256SUMS.txt` para verificar la integridad. El instalador y el código fuente no contienen bases de datos ni configuración personal.
+
 ## Abrir y desarrollar
 
 Requisitos de desarrollo: Node.js 22+, Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: no requiere Node instalado para el usuario final.
@@ -18,6 +25,8 @@ Para generar el instalador:
 ```powershell
 npm run desktop:build
 ```
+
+La preparación incluye las licencias de Node y las dependencias Rust. Si tu instalación de Node no trae un archivo LICENSE junto al ejecutable, indicá su ubicación con `NODE_LICENSE_PATH` antes de compilar. Las dependencias Rust deben estar disponibles en la caché local de Cargo; podés prepararla con `cargo fetch --manifest-path src-tauri/Cargo.toml`.
 
 El instalador NSIS queda en `src-tauri/target/release/bundle/nsis/`. También se puede usar como aplicación web local:
 
@@ -152,7 +161,7 @@ En Windows PowerShell 5, preferí pasar JSON por archivo para evitar el escape d
 
 ## Mejoras del 23/10/2026
 
-Después de compilar con `npm run desktop:build`, podés abrir `Abrir Cero.cmd` en Windows. Esta publicación contiene código fuente; los ejecutables generados y los datos personales quedan fuera del repositorio.
+Después de compilar con `npm run desktop:build`, podés abrir `Abrir Cero.cmd` en Windows. El código fuente está en el repositorio y el instalador está en GitHub Releases. Los datos personales quedan fuera de ambos.
 
 - **Resumen**: ingresos, gastos netos, categorías sin cubrir y próximos vencimientos.
 - **Metas y pagos**: objetivos por categoría y fecha. El progreso usa fondos disponibles; no crea ahorro ficticio. Recurrentes semanales, mensuales o anuales, con pausa/reactivación y registro explícito de cada vencimiento. Los días 29–31 se ajustan al último día de meses cortos y recuperan su día original en el mes siguiente.

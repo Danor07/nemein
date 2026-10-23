@@ -1,8 +1,9 @@
+param([string]$ExecutablePath, [string]$DataDir)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$executable = Join-Path $projectRoot 'src-tauri\target\release\presupuesto-cero.exe'
+$executable = if ($ExecutablePath) { $ExecutablePath } else { Join-Path $projectRoot 'src-tauri\target\release\presupuesto-cero.exe' }
 if (!(Test-Path -LiteralPath $executable)) { throw 'Todavía no existe el ejecutable compilado.' }
-$env:BUDGET_DATA_DIR = Join-Path $projectRoot '.desktop-smoke'
+$env:BUDGET_DATA_DIR = if ($DataDir) { $DataDir } else { Join-Path $projectRoot '.desktop-smoke' }
 $appProcess = Start-Process -FilePath $executable -WorkingDirectory (Split-Path $executable) -WindowStyle Hidden -PassThru
 $child = $null
 try {
@@ -25,6 +26,7 @@ try {
   if ($response.StatusCode -ne 200 -or !$response.Content.Contains('Por presupuestar')) { throw 'La pantalla inicial no respondió correctamente.' }
   $charts = Invoke-WebRequest -UseBasicParsing -Uri ($url + '/static/chart.js')
   if ($charts.StatusCode -ne 200) { throw 'No se encontró Chart.js local.' }
+  if (!$response.Content.Contains('Metas y pagos') -or !$response.Content.Contains('Agentes y terminal')) { throw 'Faltan las funcionalidades de la release.' }
   Write-Output "ARRANQUE NATIVO OK: Tauri PID $($appProcess.Id), Node incluido PID $($child.ProcessId), HTTP 200, Chart.js local."
 } finally {
   if (!$appProcess.HasExited) { Stop-Process -Id $appProcess.Id -Force }
