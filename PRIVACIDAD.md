@@ -35,3 +35,9 @@ La aplicación está pensada para una persona en un equipo de confianza. La inte
 Un cliente MCP o una terminal pueden guardar o reenviar lo consultado. Si el agente usa un modelo en la nube, sus consultas pueden llegar al proveedor elegido por el usuario. El cursor es una posición de lectura, no una contraseña.
 
 Compatibilidad: carpeta de datos e identificador de instalación anteriores se conservan para no perder presupuestos.
+
+## Configuración MCP sin token visible (código en desarrollo)
+
+La configuración usa BUDGET_AGENT_TOKEN_FILE y guarda únicamente la ruta a connection.env. CLI y MCP leen el archivo directamente; éste prevalece sobre un token heredado en el entorno. La credencial se conserva en un directorio privado: permisos del usuario y SYSTEM en Windows, y archivo 0600 en otros sistemas. La interfaz no muestra el valor. El token sigue siendo un secreto local accesible a procesos del mismo usuario; no está cifrado. No compartir ese archivo. Las configuraciones anteriores contienen el token; para adoptar el formato nuevo hay que renovar y reenlazar la conexión desde la versión actualizada. La versión 0.2.2 incorpora este formato; para actualizar una instalación 0.2.1 hay que instalar el paquete nuevo desde el Explorador y renovar la configuración.
+
+Las rutas MSIX LocalCache se rechazan como instalaciones NSIS estables en el código nuevo. Instalar desde el Explorador fuera de Codex; una comprobación hecha desde Codex no sustituye la verificación fuera de su contexto MSIX.

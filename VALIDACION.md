@@ -76,3 +76,12 @@
 - Presupuesto existente respaldado antes de actualizar. Migración real al esquema 5 verificada comparando huellas de todos los registros previos, sin diferencias.
 - MCP de la instalación comprobado con datos temporales: denegación inicial, lectura concedida, aprobación de propuesta y revocación. Arranque y cierre nativo instalado comprobados con presupuesto temporal.
 - Archivos del código instalado comparados con el checkout. La release pública 0.2.0 no se modifica y 0.2.1 no se publica en esta etapa.
+## Preparación 0.2.2 — privacidad y gates de calidad (24/10/2026)
+
+- Configuración MCP sin token visible, con BUDGET_AGENT_TOKEN_FILE; prioridad del archivo sobre un token heredado. MCP/CLI conservan compatibilidad con la variable anterior.
+- Archivos restringidos al usuario y SYSTEM en Windows. ACL efectiva comprobada; creación exclusiva, formato y errores probados. El token permanece como secreto local sin cifrado adicional.
+- Configuraciones nuevas requieren runtime 0.2.2; se rechazan LocalCache de MSIX, árboles de desarrollo y enlaces fuera de la instalación. Los clientes se reenlazan desde la instalación normal de Windows.
+- ESLint sin advertencias, PBT/fuzzing y mutación ampliada a cuatro módulos. Primer intento 84,11 % rechazado; tras reforzar pruebas, 95,08 % (348/366), sin timeouts ni errores, con umbral 90 % intacto.
+- rustfmt y Clippy locales pasan con advertencias tratadas como errores. Ejecución remota del workflow en preparación; no se afirma todavía su aprobación.
+- Actualizados csv-parse y zod y corregidas dependencias indirectas afectadas; npm audit informa cero vulnerabilidades.
+- Las migraciones SQL numeradas permanecen inalteradas y se conserva el esquema 5. El instalador 0.2.2 se prepara para ejecución desde el Explorador; no se instala de nuevo desde el contexto MSIX de Codex.

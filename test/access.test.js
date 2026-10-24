@@ -198,7 +198,7 @@ test("P2: modification preserves both versions, rejection has reason, stale base
     args: { ...payment(account), amount: -3 },
     reason: "Importe corregido",
   });
-  let row = agent.proposalStatus({ id: modified.proposal_id });
+  const row = agent.proposalStatus({ id: modified.proposal_id });
   assert.equal(row.args.amount, -5);
   assert.equal(row.final_args.amount, -3);
   assert.equal(row.status, "modified");

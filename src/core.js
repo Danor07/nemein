@@ -324,7 +324,7 @@ export function openBudget(dir = defaultDir()) {
           ),
         };
       } catch (e) {
-        throw Error(`Fila ${i + 2}: ${e.message}`);
+        throw Error(`Fila ${i + 2}: ${e.message}`, {cause:e});
       }
     });
     return { headers, rows };
@@ -358,7 +358,7 @@ export function openBudget(dir = defaultDir()) {
       m,
     );
     const history = [];
-    let [y, mo] = m.split("-").map(Number);
+    const [y, mo] = m.split("-").map(Number);
     for (let i = 11; i >= 0; i--) {
       const dt = new Date(Date.UTC(y, mo - 1 - i, 1)),
         key = dt.toISOString().slice(0, 7);

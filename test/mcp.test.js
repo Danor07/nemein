@@ -1,6 +1,7 @@
+import { saveCredential } from "../src/credentials.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -114,6 +115,51 @@ test("MCP real: default deny, explicit grants, proposals and live revocation", a
       ).isError,
       true,
     );
+  } finally {
+    await client.close();
+    b.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("MCP authenticates through a private credential file, ignoring an inherited token", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-mcp-private-")),
+    b = openBudget(dir),
+    connection = b.createConnection({ label: "Private fixture" });
+  const file = saveCredential(dir, connection.token),
+    client = new Client({ name: "private-fixture", version: "1" });
+  try {
+    await client.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [path.resolve("src/mcp.js")],
+        env: {
+          ...process.env,
+          BUDGET_DATA_DIR: dir,
+          BUDGET_AGENT_TOKEN: "invalid-inherited-token",
+          BUDGET_AGENT_TOKEN_FILE: file,
+        },
+      }),
+    );
+    assert.equal(
+      client.getServerVersion().version,
+      JSON.parse(readFileSync("package.json", "utf8")).version,
+    );
+    const denied = await client.callTool({
+      name: "presupuesto",
+      arguments: { month: "2026-10" },
+    });
+    assert.equal(JSON.parse(denied.content[0].text).code, "PERMISSION_DENIED");
+    b.setRule({
+      connection_id: connection.id,
+      action: "snapshot",
+      decision: "allow",
+    });
+    const allowed = await client.callTool({
+      name: "presupuesto",
+      arguments: { month: "2026-10" },
+    });
+    assert.equal(JSON.parse(allowed.content[0].text).ready, 0);
   } finally {
     await client.close();
     b.close();

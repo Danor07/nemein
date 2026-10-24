@@ -24,9 +24,9 @@ function registeredInstalls() {
 }
 export function installedAgentConfig(
   dataDir,
-  { runtimeRoot, installDirs, agentToken, connectionVersion = "1" } = {},
+  { runtimeRoot, installDirs, agentTokenFile, connectionVersion = "1" } = {},
 ) {
-  if (!agentToken) return null;
+  if (!agentTokenFile) return null;
   const roots = installDirs ?? [
     runtimeRoot && path.dirname(runtimeRoot),
     process.env.NEMEIN_INSTALL_DIR,
@@ -38,21 +38,24 @@ export function installedAgentConfig(
     try {
       const root = realpathSync(candidate);
       if (
+        /[\\/]AppData[\\/]Local[\\/]Packages[\\/][^\\/]+[\\/]LocalCache[\\/]/i.test(
+          root,
+        )
+      )
+        continue;
+      if (
         /(^|[\\/])(src-tauri[\\/]target|desktop-resources)([\\/]|$)/i.test(root)
       )
         continue;
-      let ancestor = root,
-        development = false;
-      while (true) {
-        if (existsSync(path.join(ancestor, ".git"))) {
-          development = true;
-          break;
-        }
-        const parent = path.dirname(ancestor);
-        if (parent === ancestor) break;
-        ancestor = parent;
-      }
-      if (development) continue;
+      const drive = path.parse(root).root;
+      const parts = root.slice(drive.length).split(path.sep).filter(Boolean);
+      const ancestors = [
+        drive,
+        ...parts.map((_part, index) =>
+          path.join(drive, ...parts.slice(0, index + 1)),
+        ),
+      ];
+      if (ancestors.some((dir) => existsSync(path.join(dir, ".git")))) continue;
       const runtime = realpathSync(path.join(root, "runtime"));
       const command = realpathSync(path.join(runtime, "node.exe"));
       const script = realpathSync(path.join(runtime, "src", "mcp.js"));
@@ -69,10 +72,14 @@ export function installedAgentConfig(
       const pkg = JSON.parse(
         readFileSync(path.join(runtime, "package.json"), "utf8"),
       );
-      const [major, minor] = (pkg.version || "").split(".").map(Number);
+      const [major, minor, patch] = (pkg.version || "").split(".").map(Number);
       if (
         !existsSync(path.join(runtime, "src", "access.js")) ||
-        !(major > 0 || (major === 0 && minor >= 2))
+        !existsSync(path.join(runtime, "src", "credentials.js")) ||
+        !(
+          major > 0 ||
+          (major === 0 && (minor > 2 || (minor === 2 && patch >= 2)))
+        )
       )
         continue;
       return {
@@ -82,7 +89,7 @@ export function installedAgentConfig(
             args: [script],
             env: {
               BUDGET_DATA_DIR: dataDir,
-              BUDGET_AGENT_TOKEN: agentToken,
+              BUDGET_AGENT_TOKEN_FILE: agentTokenFile,
               BUDGET_AGENT_VERSION: connectionVersion,
             },
           },

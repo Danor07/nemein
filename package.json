@@ -1,28 +1,39 @@
 {
   "name": "nemein",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js test/properties/*.property.test.js test/fuzz/*.test.js",
     "cli": "node src/cli.js",
     "mcp": "node src/mcp.js",
     "desktop:prepare": "node scripts/prepare-desktop.js",
     "desktop:dev": "npm run desktop:prepare && tauri dev",
-    "desktop:build": "npm run desktop:prepare && tauri build"
+    "desktop:build": "npm run desktop:prepare && tauri build",
+    "lint": "eslint src public scripts test *.mjs --max-warnings 0 && prettier --check .github/workflows/*.yml",
+    "test:unit": "node --test test/*.test.js",
+    "test:pbt": "node --test test/properties/*.property.test.js",
+    "test:fuzz": "node --test test/fuzz/*.test.js",
+    "test:mutation": "stryker run stryker.config.mjs && node scripts/mutation-gate.js",
+    "quality": "npm run lint && npm run test:unit && npm run test:pbt && npm run test:fuzz && npm run test:mutation"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
     "better-sqlite3": "^12.4.1",
     "chart.js": "^4.5.0",
-    "csv-parse": "^6.1.0",
+    "csv-parse": "7.0.3",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
-    "zod": "^3.25.0"
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@stryker-mutator/core": "10.1.1",
     "@tauri-apps/cli": "^2.8.0",
+    "eslint": "10.13.0",
+    "fast-check": "4.10.2",
+    "globals": "17.13.0",
     "prettier": "^3.9.10"
   },
   "allowScripts": {

@@ -4,9 +4,9 @@ Las interfaces CLI y MCP comparten el catálogo de src/actions.js y la política
 
 ## Conectar un cliente
 
-En **Permisos y propuestas**, creá una conexión y guardá su configuración. El token aparece una sola vez; renovarlo invalida el anterior. Elegí permitir, preguntar o negar para cada acción. Sin una regla vigente, el pedido se niega.
+En **Permisos y propuestas**, creá una conexión y guardá su configuración. La credencial se guarda en un archivo privado; renovarla invalida el token anterior. Elegí permitir, preguntar o negar para cada acción. Sin una regla vigente, el pedido se niega.
 
-La exportación MCP requiere Nemein instalado, versión 0.2.0 o posterior. CLI usa BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION. La descarga está protegida por CSRF y disponible durante diez minutos.
+La exportación MCP requiere Nemein instalado, versión 0.2.2 o posterior. CLI usa BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION; la variable BUDGET_AGENT_TOKEN se conserva por compatibilidad. La descarga está protegida por CSRF y disponible durante diez minutos.
 
 ## Política
 

@@ -40,3 +40,7 @@ Usá una carpeta temporal mediante BUDGET_DATA_DIR. Nunca pruebes cambios sobre 
 Contratos: [permisos y propuestas](docs/permisos-y-propuestas.md) y [eventos](docs/eventos.md). Uso e instalación: [README](README.md). Datos y límites de confianza: [PRIVACIDAD](PRIVACIDAD.md). Firma del instalador: [SIGNING](SIGNING.md).
 
 Cambios de esquema: seguir [Migraciones](docs/migraciones.md). Los archivos SQL distribuidos son inmutables; agregar otro número y probar actualizaciones con datos previos.
+
+## Calidad obligatoria
+
+Ejecutar npm run quality antes de entregar cambios. Incluir Property-Based Testing, fuzzing adversarial y ampliar la mutación para las decisiones modificadas. Análisis estático sin advertencias; no reducir umbrales ni excluir invariantes para obtener verde. Código, pruebas y configuración de CI requieren revisión. Ver [Control de calidad](docs/calidad.md).

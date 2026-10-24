@@ -1,3 +1,4 @@
+import { saveCredential } from "./credentials.js";
 import { installedAgentConfig } from "./agent-config.js";
 import express from "express";
 import path from "node:path";
@@ -52,7 +53,7 @@ export function createApp(budget, { installationRoots } = {}) {
     const connectionConfig = installedAgentConfig(budget.dir, {
       runtimeRoot: root,
       installDirs: installationRoots,
-      agentToken: connection.token,
+      agentTokenFile: saveCredential(budget.dir, connection.token),
       connectionVersion: connection.version,
     });
     for (const [id, entry] of connectionExports)
@@ -67,19 +68,21 @@ export function createApp(budget, { installationRoots } = {}) {
       });
     return render(req, res, {
       view: "access",
-      newConnection: connection,
+      newConnection: {
+        id: connection.id,
+        label: connection.label,
+        version: connection.version,
+      },
       connectionConfig,
       exportId,
     });
   }
   app.get("/agent-config", (_req, res) =>
-    res
-      .status(400)
-      .json({
-        code: "CONNECTION_REQUIRED",
-        error:
-          "Creá o renová una conexión desde Permisos y propuestas para descargar su configuración.",
-      }),
+    res.status(400).json({
+      code: "CONNECTION_REQUIRED",
+      error:
+        "Creá o renová una conexión desde Permisos y propuestas para descargar su configuración.",
+    }),
   );
   app.post("/agent-config", (req, res, next) => {
     try {

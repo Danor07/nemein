@@ -17,7 +17,7 @@ SHA256SUMS.txt permite comprobar el instalador y el certificado público. Los ar
 
 **Al actualizar desde 0.1.0:** creá una conexión en Permisos y propuestas, elegí sus acciones y reenlazá tu cliente MCP/CLI con el nuevo token. Los interruptores antiguos de lectura/escritura ya no conceden acceso. Conservá un backup antes de actualizar.
 
-El código 0.2.1 corrige el rechazo de formularios con «Origen no permitido» e incorpora [migraciones numeradas](docs/migraciones.md). Estos cambios todavía no forman parte del instalador público 0.2.0.
+El código 0.2.2 oculta el token de la configuración MCP, rechaza instalaciones privadas de MSIX, corrige el rechazo de formularios con «Origen no permitido» e incorpora [migraciones numeradas](docs/migraciones.md). Estos cambios todavía no forman parte del instalador público 0.2.0.
 
 ## Abrir y desarrollar
 
@@ -109,12 +109,12 @@ La deduplicación compara cuenta + fecha + beneficiario + importe + número de o
 Las conexiones de agentes ahora comienzan **sin permisos de lectura ni escritura**. BUDGET_MCP_WRITE y BUDGET_EVENTS_READ dejan de habilitar acciones. Las configuraciones anteriores deben volver a enlazarse desde la aplicación.
 
 1. Abrí **Permisos y propuestas**.
-2. Creá una conexión para tu cliente y guardá la configuración con su token.
+2. Creá una conexión para tu cliente y guardá la configuración, que contiene la ruta a su credencial privada.
 3. Elegí permitir, preguntar o negar por acción. Podés limitar importe absoluto y cuenta.
-4. Importá la configuración en tu cliente MCP. Para CLI, usá BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION.
+4. Importá la configuración en tu cliente MCP. Para CLI, usá BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION.
 5. Los pedidos en preguntar aparecen en la bandeja. Podés aceptar, modificar con motivo o rechazar con motivo.
 
-El token se muestra una sola vez; renovar lo invalida para el cliente anterior. Podés revocar permisos en caliente. Las reglas nuevas o incompatibles quedan negadas hasta revisarlas.
+El token se guarda en un archivo privado y no aparece en la configuración ni en la página; renovarlo lo invalida para el cliente anterior. Podés revocar permisos en caliente. Las reglas nuevas o incompatibles quedan negadas hasta revisarlas.
 
 Para consultar con CLI:
 
@@ -194,4 +194,4 @@ Contratos y límites: [Eventos](docs/eventos.md).
 
 ## Rutas estables para MCP
 
-Descargá la configuración desde una conexión de Nemein instalado, versión 0.2.0 o posterior. El generador verifica una instalación NSIS completa y rechaza target, desktop-resources y árboles Git. Sin instalación compatible muestra cómo actualizarla; no exporta rutas de compilación. NEMEIN_INSTALL_DIR permite indicar una instalación personalizada.
+Descargá la configuración desde una conexión de Nemein instalado, versión 0.2.2 o posterior. El generador verifica una instalación NSIS completa y rechaza target, desktop-resources y árboles Git. Sin instalación compatible muestra cómo actualizarla; no exporta rutas de compilación. NEMEIN_INSTALL_DIR permite indicar una instalación personalizada.
