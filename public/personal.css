@@ -94,3 +94,7 @@ dialog::backdrop { background:rgb(10 30 20 / .45); }
   h1 { font-size:28px; } .budget-overview .big-number { overflow-wrap:anywhere; }
   .goal .due-row { flex-wrap:wrap; gap:4px; }
 }
+
+/* Approved Nemein identity: node symbol and name, without tagline. */
+.brand { display:flex; align-items:center; gap:8px; font-size:32px; letter-spacing:-1px; padding-left:8px; }
+.brand img { width:44px; height:44px; padding:4px; border-radius:8px; background:var(--rail-text); flex:none; object-fit:contain; }
