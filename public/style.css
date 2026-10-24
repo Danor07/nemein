@@ -744,3 +744,5 @@ summary:focus-visible {
 .action-button:disabled { cursor: wait; filter: none; }
 .action-button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 .action-feedback[data-kind=error] { color: var(--feedback-error-ink); }
+
+[data-feedback-icon]:empty { display: none; }
