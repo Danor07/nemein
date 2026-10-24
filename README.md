@@ -1,6 +1,6 @@
 # Nemein — presupuesto personal local
 
-Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés.
+Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés. Un software de finanzas personales enfocado en workflows.
 
 Primera versión pública experimental. Código abierto bajo licencia MIT. Presupuesto base cero en guaraníes, con acceso para agentes mediante CLI y MCP.
 
