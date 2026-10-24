@@ -30,7 +30,7 @@ Una base nueva debe estar vacía y en versión 0. Una base con tablas desconocid
 
 Toda la actualización pendiente se ejecuta bajo una transacción inmediata. Se verifica el esquema resultante antes de confirmar. Si falla una etapa, también se revierten las tablas, registros y cambios de versión de las etapas anteriores de ese intento. No se hacen operaciones de red dentro de esa transacción.
 
-La apertura concurrente queda serializada: otro proceso comprueba el registro después de adquirir el bloqueo y no repite lo ya confirmado.
+La apertura concurrente queda serializada: otro proceso comprueba el registro después de adquirir el bloqueo y no repite lo ya confirmado. Después de validar y migrar, la activación de WAL reintenta sólo SQLITE_BUSY de forma acotada (100 intentos, pausas de 50 ms) y restaura el busy_timeout previo. No se reejecutan operaciones financieras ni se ocultan otros errores.
 
 ## Agregar una migración
 

@@ -14,9 +14,9 @@ npm run quality ejecuta en orden:
 
 Las semillas están fijadas en cada propiedad. Un fallo informa seed, path y contraejemplo reducido. No sustituir una propiedad fallida por un ejemplo que la haga pasar.
 
-La mutación cubre src/policy.js, src/agent-config.js, src/credentials.js y scripts/mutation-gate.js. Medición local en Windows: 95,08 %, 348 de 366 mutantes detectados, sin timeouts ni errores. Quedan 18 supervivientes visibles en el reporte; algunos son equivalentes. Este score no representa toda la aplicación.
+La mutación cubre src/policy.js, src/agent-config.js, src/credentials.js, src/sqlite-startup.js y scripts/mutation-gate.js. La CI Linux detectó 397 de 416 mutantes: 95,43 %, con 19 supervivientes, sin timeouts, errores ni mutantes sin cobertura. El reporte conserva los supervivientes para revisión; este score no representa toda la aplicación.
 
-El primer intento sobre ese alcance dio 84,11 % y fue rechazado. Se agregaron pruebas de formato de credenciales, rutas, fallbacks, enlaces, ACL y ejecución del gate. El recorrido de ancestros usa una lista finita para evitar los mutantes con bucles infinitos. No se redujo el umbral ni se excluyeron operadores.
+El primer intento sobre los cuatro módulos anteriores dio 84,11 % y fue rechazado. La medición local posterior sobre esos cuatro módulos alcanzó 95,08 % (348/366). Se agregaron pruebas de formato de credenciales, rutas, fallbacks, enlaces, ACL y ejecución del gate. El recorrido de ancestros usa una lista finita para evitar los mutantes con bucles infinitos. No se redujo el umbral ni se excluyeron operadores.
 
 Al modificar otras decisiones críticas, ampliar la mutación y las propiedades que las verifican. Los cambios de umbrales, exclusiones e invariantes requieren revisión explícita. Los instaladores excluyen las herramientas de desarrollo.
 
@@ -28,7 +28,7 @@ Después de instalar, los tests corren sin red, con raíz de sólo lectura, capa
 
 El job Windows usa un runner desechable, versiones fijadas de Node y Rust, Cargo.lock, regresiones/PBT/ACL y rustfmt/Clippy con advertencias como errores. La imagen Windows hospedada puede actualizarse: no se promete reproducción binaria bit a bit.
 
-Localmente se comprobaron ESLint, regresiones, PBT, fuzzing, mutación, rustfmt y Clippy. Docker no está disponible en este entorno; su ejecución se comprueba en GitHub antes de aprobar la entrega.
+Los dos jobs se comprobaron en GitHub sobre fca6ad5: Quality gate y Native static gate aprobados. Docker no está disponible localmente; el aislamiento Linux se validó en ese runner remoto. La primera ejecución Windows encontró un permiso explícito adicional de Administradores y una carrera al activar WAL. Se corrigieron antes de obtener verde, manteniendo las pruebas y el umbral. Los archivos se crean vacíos, se restringe su ACL y sólo entonces se escribe el secreto; WAL reintenta únicamente SQLITE_BUSY durante el arranque, hasta 100 intentos con pausas de 50 ms, restaurando busy_timeout.
 
 ## Revisión y entrega
 

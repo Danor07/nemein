@@ -85,3 +85,14 @@
 - rustfmt y Clippy locales pasan con advertencias tratadas como errores. Ejecución remota del workflow en preparación; no se afirma todavía su aprobación.
 - Actualizados csv-parse y zod y corregidas dependencias indirectas afectadas; npm audit informa cero vulnerabilidades.
 - Las migraciones SQL numeradas permanecen inalteradas y se conserva el esquema 5. El instalador 0.2.2 se prepara para ejecución desde el Explorador; no se instala de nuevo desde el contexto MSIX de Codex.
+
+## Cierre de CI y paquete 0.2.2 (24/10/2026)
+
+- CI sobre fca6ad5: Quality gate Linux y Native static gate Windows aprobados. Incluye AST/linter, regresiones, propiedades, fuzzing, mutación, rustfmt y Clippy sin advertencias.
+- En cada plataforma: 86 pruebas, 85 aprobadas y una omisión específica del sistema. Linux omite ACL Windows; Windows omite creación de symlink de archivo sin privilegio. Las dos fronteras se ejecutan en su plataforma compatible.
+- Mutación Linux: 397/416 detectados, 95,43 %, 19 supervivientes, sin timeouts, errores ni casos sin cobertura.
+- El primer job Windows rechazó permisos adicionales de Administradores en la credencial y SQLITE_BUSY durante el cambio concurrente a WAL. Se corrigen ambos: ACL antes de escribir el secreto y reintento acotado del arranque. No se modifica SQL histórico ni se relajan tests.
+- MCP del runtime empaquetado: versión 0.2.2, 22 herramientas, archivo de credencial prioritario sobre variable heredada, denegación inicial, lectura concedida y denegación posterior. Prueba con datos ficticios. Los 32 archivos de aplicación coinciden con el checkout; payload sin datos privados ni herramientas de desarrollo.
+- Ejecutable nativo 0.2.2 con runtime actualizado: HTTP 200, Chart.js local y cierre del motor. Configuración visible comprobada en navegador con conexión ficticia, sin token. Chrome bloqueó el envío de descarga de la prueba; su respuesta y contenido se verificaron por el test HTTP. No se eludió el bloqueo del navegador.
+- La instalación 0.2.1 desde el Explorador fue confirmada por el usuario. Las afirmaciones históricas de instalación y registro comprobadas dentro de Codex/MSIX no equivalen a una instalación normal de Windows. Instalar 0.2.2 desde el Explorador y renovar/re-enlazar la configuración sigue siendo un paso manual pendiente.
+- La prueba en equipo limpio y la instalación 0.2.2 fuera de MSIX siguen pendientes. No se hizo merge ni se publicó una release nueva; protección de rama administrativa no configurada por esta tarea.
