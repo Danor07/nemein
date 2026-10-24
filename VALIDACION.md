@@ -42,3 +42,9 @@
 - Se verifica cabecera Content-Disposition y que el JSON desplegable coincide con la descarga. Suite completa 30/30 aprobada.
 - Interacción en navegador local: el clic actualiza el estado accesible y la alternativa muestra el JSON. La ventana Tauri corregida arrancó; la herramienta de automatización no pudo completar allí los clics por falta de geometría, por lo que la comprobación del nuevo estado se hizo en el navegador local.
 - Fuente y runtimes actualizados; sin recompilación Rust ni nuevo instalador.
+## Configuración MCP estable (24/10/2026)
+
+- 32/32 pruebas aprobadas.
+- Resolución de instalación y rechazo de target, desktop-resources, árboles Git e instalaciones incompletas.
+- Sin instalación: página funcional con aviso y exportación 503 NEMEIN_NOT_INSTALLED.
+- Pruebas con instalaciones sintéticas; sin instalación NSIS real ni instalador nuevo en esta etapa. P1/P2 pendientes.

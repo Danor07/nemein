@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,mkdirSync,writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {openBudget} from '../src/core.js';
@@ -49,7 +49,12 @@ test('metas usan fondos reales; el cubo conserva totales en todos los cortes',as
  assert.equal(b.snapshot('2026-01').categories.find(c=>c.id===7).available,200000);
 });
 test('pantallas nuevas, configuración MCP y recurrentes por HTTP',async t=>{
- const {b,a}=setup(t), server=createApp(b).listen(0,'127.0.0.1');
+ const {b,a}=setup(t);
+ const installed=path.join(b.dir,'Installed');
+ mkdirSync(path.join(installed,'runtime','src'),{recursive:true});
+ for(const f of ['nemein.exe','uninstall.exe','runtime/node.exe','runtime/src/mcp.js'])writeFileSync(path.join(installed,f),'fixture');
+ writeFileSync(path.join(installed,'runtime','package.json'),JSON.stringify({name:'nemein'}));
+ const server=createApp(b,{installationRoots:[installed]}).listen(0,'127.0.0.1');
  await new Promise(r=>server.once('listening',r));
  t.after(()=>new Promise(r=>server.close(r)));
  const base='http://127.0.0.1:'+server.address().port;

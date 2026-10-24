@@ -210,3 +210,13 @@ BUDGET_EVENTS_READ=1 es una concesión específica para leer el historial y snap
 En MCP, esa misma variable agrega las herramientas snapshot_eventos y eventos. El seguimiento continuo es un comando de terminal; no imprime registros sueltos dentro del protocolo MCP. BUDGET_MCP_WRITE sigue controlando escritura por separado.
 
 Los contratos JSON están en src/contracts/. No se agregan endpoints HTTP ni servicios de nube.
+
+## Rutas estables para MCP
+
+Para uso diario, descargá la configuración desde Nemein instalado. El ejemplo manual anterior basado en el proyecto y desktop-resources sirve sólo para desarrollo.
+
+La descarga ahora requiere una instalación completa: nemein.exe, uninstall.exe y runtime con node.exe, package.json y src/mcp.js. Busca la instalación actual, el registro NSIS y ubicaciones habituales; NEMEIN_INSTALL_DIR permite indicar una ubicación personalizada.
+
+Rechaza src-tauri/target, desktop-resources, árboles Git e instalaciones incompletas. Sin instalación válida, muestra que hace falta instalar Nemein y devuelve NEMEIN_NOT_INSTALLED en vez de exportar rutas de compilación.
+
+Esta corrección está en el código y runtimes del checkout; no se publicó un instalador nuevo. Las pruebas usaron instalaciones sintéticas, no una instalación NSIS real.

@@ -1,10 +1,11 @@
+import { installedAgentConfig } from "./agent-config.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { openBudget, today } from "./core.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export function createApp(budget) {
+export function createApp(budget, { installationRoots } = {}) {
   const app = express(),
     csrf = randomBytes(32).toString("hex"),
     previews = new Map();
@@ -45,12 +46,12 @@ export function createApp(budget) {
     next();
   });
   app.use("/static", express.static(path.join(root, "public")));
-  const agentConfig = () => ({mcpServers:{nemein:{
-    command:process.execPath,args:[path.join(root,'src','mcp.js')],env:{BUDGET_DATA_DIR:budget.dir}
-  }}});
+  const agentConfig = () => installedAgentConfig(budget.dir, {runtimeRoot:root,installDirs:installationRoots});
   app.locals.agentConfig = agentConfig;
   app.get('/agent-config', (_req,res) => {
-    res.attachment('nemein-mcp.json').json(agentConfig());
+    const config=agentConfig();
+    if(!config)return res.status(503).json({code:"NEMEIN_NOT_INSTALLED",error:"Instalá Nemein con su instalador para generar una configuración MCP estable."});
+    res.attachment('nemein-mcp.json').json(config);
   });
   app.get("/static/chart.js", (_req, res) =>
     res.sendFile('chart.umd.js', {root:path.join(root, 'node_modules/chart.js/dist')}),
