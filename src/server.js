@@ -20,7 +20,8 @@ export function createApp(budget, { installationRoots } = {}) {
       "Content-Security-Policy":
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer",
+      // Keep the local origin on HTML form POSTs; external links still receive no referrer.
+      "Referrer-Policy": "same-origin",
       "Cache-Control": "no-store",
     });
     if (

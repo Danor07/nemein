@@ -17,6 +17,8 @@ SHA256SUMS.txt permite comprobar el instalador y el certificado público. Los ar
 
 **Al actualizar desde 0.1.0:** creá una conexión en Permisos y propuestas, elegí sus acciones y reenlazá tu cliente MCP/CLI con el nuevo token. Los interruptores antiguos de lectura/escritura ya no conceden acceso. Conservá un backup antes de actualizar.
 
+El código 0.2.1 corrige el rechazo de formularios con «Origen no permitido» e incorpora [migraciones numeradas](docs/migraciones.md). Estos cambios todavía no forman parte del instalador público 0.2.0.
+
 ## Abrir y desarrollar
 
 Requisitos de desarrollo: Node.js 22+, Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: no requiere Node instalado para el usuario final.

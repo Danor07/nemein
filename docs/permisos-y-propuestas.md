@@ -47,6 +47,6 @@ El esquema está en src/contracts/proposal-file.schema.json. El archivo no inclu
 
 Las conexiones, reglas, decisiones, solicitudes y propuestas se guardan en SQLite. Los tokens se generan con 32 bytes aleatorios y se almacenan como hashes SHA-256. Las escrituras autorizadas, su resultado idempotente, auditoría y evento se confirman juntos. Las consultas comprueban permiso y auditoría antes de leer. Los respaldos asíncronos admiten permitir o negar; no aprobación diferida.
 
-La migración es transaccional e idempotente. Restaurar un backup restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes. La interfaz muestra las cien decisiones recientes y pagina las propuestas de a cincuenta; los registros anteriores permanecen en la base.
+El esquema usa [migraciones numeradas](migraciones.md), transaccionales e idempotentes. Restaurar un backup restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes. La interfaz muestra las cien decisiones recientes y pagina las propuestas de a cincuenta; los registros anteriores permanecen en la base.
 
 Estos controles autorizan registros locales. No ejecutan pagos bancarios ni revierten hechos ocurridos fuera de Nemein.

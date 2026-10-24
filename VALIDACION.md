@@ -60,3 +60,15 @@
 - MCP probado desde Node y módulos de la instalación, usando sólo datos temporales: configuración estable, denegación predeterminada, lectura concedida, propuesta aprobada y revocación inmediata.
 - La release pública v0.1.0 permanece intacta. No se publicó v0.2.0. Las configuraciones anteriores deben reenlazarse con un token creado manualmente por el propietario.
 - HTTP/OpenAPI/SSE, sincronización entre dispositivos, plugins WASM y entrega externa P4b no forman parte de esta entrega.
+
+## Migraciones numeradas y formularios — código 0.2.1 (24/10/2026)
+
+- 58/58 pruebas aprobadas: las 48 anteriores y diez escenarios de migración.
+- SQL histórico congelado de los tags v0.1.0 y v0.2.0; actualización de esas bases y del esquema intermedio de eventos, con datos ficticios.
+- Preservación de movimientos conciliados, saldos, categorías propias, metas, recurrentes, tokens, reglas, solicitudes, propuestas y cursor/identidad. Sin historia financiera inventada.
+- Secuencia 1–5, registro con nombre/hash/fecha, hashes independientes de CRLF/LF y actualización completa bajo una transacción inmediata.
+- Reapertura idempotente, prefijo numerado pendiente, tres aperturas concurrentes, rollback de un fallo tardío y posterior reintento. Se rechazan versiones futuras, historial alterado y bases no reconocidas.
+- Reproducción real en navegador del POST de conexión con Origin:null causado por Referrer-Policy:no-referrer. Se cambia a same-origin; un clic real crea la conexión y la cabecera enviada conserva el origen local.
+- Se mantienen los rechazos de Origin:null, origen ajeno, otro puerto, Host ajeno y CSRF inválido. No se agregan excepciones para WebView ni se elimina la guarda de origen.
+- Ejecutable 0.2.1 compilado y comprobado con presupuesto temporal: HTTP 200, Chart.js local y cierre del motor.
+- La automatización de ventanas Windows no respondió; el clic se verificó en navegador y el arranque nativo mediante la prueba de escritorio.

@@ -400,7 +400,7 @@ test("P1: concurrent processes migrate the audit schema safely", async (t) => {
   const { b } = fixture(t),
     dir = b.dir;
   b.db.exec(
-    "DROP TABLE agent_audit; CREATE TABLE agent_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,at TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,args TEXT NOT NULL,decision TEXT NOT NULL,reason TEXT NOT NULL,reviewer TEXT)",
+    "DROP TABLE schema_migrations; PRAGMA user_version=1; DROP TABLE agent_audit; CREATE TABLE agent_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,at TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,args TEXT NOT NULL,decision TEXT NOT NULL,reason TEXT NOT NULL,reviewer TEXT)",
   );
   b.close();
   const core = new URL("../src/core.js", import.meta.url).href;

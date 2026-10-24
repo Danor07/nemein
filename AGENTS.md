@@ -16,5 +16,7 @@ Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en
 - La interfaz local es del propietario de confianza. Estos permisos no aíslan otros programas del mismo usuario del sistema.
 - npm test usa presupuestos temporales. Actualizar los runtimes de escritorio al cambiar src, views o public; distribuir código de uso diario mediante instalador, nunca con rutas target.
 
+Migraciones: src/migrations.js y src/migrations/. Agregar cambios con un número nuevo; no editar SQL ya distribuido. Actualizar la validación y probar bases antiguas, reapertura y rollback. Ver docs/migraciones.md.
+
 Fuentes: src/actions.js (catálogo), src/access.js (política y propuestas), docs/permisos-y-propuestas.md (contratos).
 Compatibilidad: datos en %LOCALAPPDATA%\PresupuestoCero e identificador local.presupuesto.cero conservados.

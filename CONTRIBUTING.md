@@ -29,6 +29,7 @@ Usá una carpeta temporal mediante BUDGET_DATA_DIR. Nunca pruebes cambios sobre 
 | Ruta | Responsabilidad |
 |---|---|
 | src/core.js y src/planning.js | Presupuesto, validaciones y planificación |
+| src/migrations.js y src/migrations/ | Migraciones numeradas de SQLite |
 | src/actions.js y src/access.js | Catálogo de acciones, permisos y propuestas |
 | src/events.js y src/event-reads.js | Registro transaccional, snapshot y cursores |
 | src/cli.js y src/mcp.js | Interfaces para herramientas externas |
@@ -37,3 +38,5 @@ Usá una carpeta temporal mediante BUDGET_DATA_DIR. Nunca pruebes cambios sobre 
 | test/ y src/contracts/ | Pruebas, vectores y esquemas JSON |
 
 Contratos: [permisos y propuestas](docs/permisos-y-propuestas.md) y [eventos](docs/eventos.md). Uso e instalación: [README](README.md). Datos y límites de confianza: [PRIVACIDAD](PRIVACIDAD.md). Firma del instalador: [SIGNING](SIGNING.md).
+
+Cambios de esquema: seguir [Migraciones](docs/migraciones.md). Los archivos SQL distribuidos son inmutables; agregar otro número y probar actualizaciones con datos previos.

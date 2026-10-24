@@ -165,7 +165,7 @@ test("events: existing ledger gets no fabricated history; budgets have separate 
   const b = fixture(t),
     id = account(b);
   b.addTransaction(tx(id));
-  b.db.exec("DROP TABLE budget_events; DROP TABLE event_identity");
+  b.db.exec("DROP TABLE schema_migrations; PRAGMA user_version=1; DROP TABLE budget_events; DROP TABLE event_identity");
   b.close();
   const migrated = openBudget(b.dir);
   try {
