@@ -1,2 +1,2 @@
 @echo off
-start "" "%~dp0src-tauri\target\release\presupuesto-cero.exe"
+call "%~dp0Abrir Nemein.cmd"

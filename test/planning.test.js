@@ -57,7 +57,7 @@ test('pantallas nuevas, configuración MCP y recurrentes por HTTP',async t=>{
   const res=await fetch(base+'/?view='+view); assert.equal(res.status,200,await res.text());
  }
  const cfg=await (await fetch(base+'/agent-config')).json();
- assert.equal(cfg.mcpServers['presupuesto-cero'].env.BUDGET_DATA_DIR,b.dir);
+ assert.equal(cfg.mcpServers['nemein'].env.BUDGET_DATA_DIR,b.dir);
  const html=await (await fetch(base+'/?view=planning')).text();
  const _csrf=html.match(/name="_csrf" value="([^"]+)"/)[1];
  const post=(action,p)=>fetch(base+'/action/'+action,{method:'POST',body:new URLSearchParams({_csrf,view:'planning',...p}),redirect:'manual'});

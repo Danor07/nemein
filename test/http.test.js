@@ -27,7 +27,7 @@ test("pantallas SSR, CSRF, origen y guardado por HTTP", async (t) => {
   ]) {
     const r = await fetch(base + "/?view=" + view);
     assert.equal(r.status, 200, view);
-    assert.match(await r.text(), /Cero/);
+    assert.match(await r.text(), /Nemein/);
   }
   const html = await (await fetch(base + "/?view=budget")).text(),
     csrf = html.match(/name="_csrf" value="([^"]+)"/)[1];

@@ -1,4 +1,4 @@
-# Colaborar con Cero
+# Colaborar con Nemein
 
 1. Instalá Node.js 22 o superior y ejecutá `npm ci`.
 2. Ejecutá `npm test`. Las pruebas crean bases temporales separadas.

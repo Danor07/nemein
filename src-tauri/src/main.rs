@@ -66,7 +66,7 @@ fn main() {
             let origin = parsed.origin().ascii_serialization();
             app.manage(Backend(Mutex::new(child)));
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
-                .title("Cero · Presupuesto personal")
+                .title("Nemein · Presupuesto personal")
                 .inner_size(1360.0, 900.0)
                 .min_inner_size(800.0, 620.0)
                 .on_navigation(move |u| u.origin().ascii_serialization() == origin)
@@ -74,7 +74,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("No se pudo iniciar Presupuesto Cero");
+        .expect("No se pudo iniciar Nemein");
     app.run(|handle, event| {
         if let tauri::RunEvent::Exit = event {
             if let Some(state) = handle.try_state::<Backend>() {

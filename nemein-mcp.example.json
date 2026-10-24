@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "presupuesto-cero": {
+    "nemein": {
       "command": "node",
       "args": ["RUTA_ABSOLUTA_AL_PROYECTO/src/mcp.js"]
     }

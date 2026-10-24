@@ -1,7 +1,7 @@
 param([string]$ExecutablePath, [string]$DataDir)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$executable = if ($ExecutablePath) { $ExecutablePath } else { Join-Path $projectRoot 'src-tauri\target\release\presupuesto-cero.exe' }
+$executable = if ($ExecutablePath) { $ExecutablePath } else { Join-Path $projectRoot 'src-tauri\target\release\nemein.exe' }
 if (!(Test-Path -LiteralPath $executable)) { throw 'Todavía no existe el ejecutable compilado.' }
 $env:BUDGET_DATA_DIR = if ($DataDir) { $DataDir } else { Join-Path $projectRoot '.desktop-smoke' }
 $appProcess = Start-Process -FilePath $executable -WorkingDirectory (Split-Path $executable) -WindowStyle Hidden -PassThru

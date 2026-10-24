@@ -6,7 +6,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 test("MCP real por stdio: lectura predeterminada y escritura explícita", async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "cero-mcp-"));
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-mcp-"));
   try {
     for (const write of ["0", "1"]) {
       const transport = new StdioClientTransport({

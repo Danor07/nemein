@@ -1,4 +1,6 @@
-# Cero — presupuesto personal local
+# Nemein — presupuesto personal local
+
+Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés.
 
 Primera versión pública experimental. Código abierto bajo licencia MIT. Presupuesto base cero en guaraníes, con acceso para agentes mediante CLI y MCP.
 
@@ -7,7 +9,7 @@ Aplicación de presupuesto base cero en guaraníes enteros. Interfaz de escritor
 
 ## Descargar para Windows
 
-La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/presupuesto-cero/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador todavía no tiene firma digital.
+La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador todavía no tiene firma digital.
 
 Los archivos de la release incluyen `SHA256SUMS.txt` para verificar la integridad. El instalador y el código fuente no contienen bases de datos ni configuración personal.
 
@@ -119,7 +121,7 @@ Ejemplo de configuración para un cliente MCP que use command/args/env:
 ```json
 {
   "mcpServers": {
-    "presupuesto-cero": {
+    "nemein": {
       "command": "node",
       "args": [
         "RUTA_ABSOLUTA_AL_PROYECTO/src/mcp.js"
@@ -161,13 +163,13 @@ En Windows PowerShell 5, preferí pasar JSON por archivo para evitar el escape d
 
 ## Mejoras del 23/10/2026
 
-Después de compilar con `npm run desktop:build`, podés abrir `Abrir Cero.cmd` en Windows. El código fuente está en el repositorio y el instalador está en GitHub Releases. Los datos personales quedan fuera de ambos.
+Después de compilar con `npm run desktop:build`, podés abrir `Abrir Nemein.cmd` en Windows. El código fuente está en el repositorio y el instalador está en GitHub Releases. Los datos personales quedan fuera de ambos.
 
 - **Resumen**: ingresos, gastos netos, categorías sin cubrir y próximos vencimientos.
 - **Metas y pagos**: objetivos por categoría y fecha. El progreso usa fondos disponibles; no crea ahorro ficticio. Recurrentes semanales, mensuales o anuales, con pausa/reactivación y registro explícito de cada vencimiento. Los días 29–31 se ajustan al último día de meses cortos y recuperan su día original en el mes siguiente.
 - **Movimientos**: búsqueda por beneficiario/categoría y filtro por cuenta, dentro del mes seleccionado.
 - **Reportes**: cruce cuenta × categoría y totales conservados. El motor `cube` permite hasta tres dimensiones (month/day/account/category/payee), con fechas inicial y final. Consulta directamente SQLite con dimensiones permitidas y conserva los totales entre agrupamientos.
-- **Agentes y terminal**: configuración MCP descargable y CLI con `cero.cmd`. Copiá `cero-mcp.example.json` como `cero-mcp.json`, reemplazá la ruta genérica por la ruta absoluta del proyecto e importalo en tu cliente. El archivo local queda excluido de Git.
+- **Agentes y terminal**: configuración MCP descargable y CLI con `nemein.cmd`. Copiá `nemein-mcp.example.json` como `nemein-mcp.json`, reemplazá la ruta genérica por la ruta absoluta del proyecto e importalo en tu cliente. El archivo local queda excluido de Git.
 
 Comandos nuevos: overview, search, goals, goal-set, goal-remove, recurring, recurring-create, recurring-post, recurring-toggle, cube, category y group. Consultá AGENTS.md para parámetros.
 
@@ -176,3 +178,5 @@ No se ejecutan pagos bancarios ni se registran recurrentes automáticamente. Reg
 ## Licencia
 
 MIT. Ver [LICENSE](LICENSE). Las dependencias mantienen sus respectivas licencias.
+
+Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.

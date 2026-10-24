@@ -1,6 +1,6 @@
 # Privacidad y datos locales
 
-Cero guarda el presupuesto en una base SQLite en el equipo. No incluye cuentas de usuario, telemetría, sincronización bancaria ni servicios de nube propios. El servidor HTTP escucha únicamente en 127.0.0.1.
+Nemein guarda el presupuesto en una base SQLite en el equipo. No incluye cuentas de usuario, telemetría, sincronización bancaria ni servicios de nube propios. El servidor HTTP escucha únicamente en 127.0.0.1.
 
 ## Archivos personales
 
@@ -19,3 +19,5 @@ Si un agente consulta el presupuesto y utiliza un modelo en la nube, puede envia
 ## Uso local
 
 La aplicación está pensada para una persona en un equipo de confianza. No ofrece autenticación multiusuario y no debe exponerse mediante un proxy, túnel o servidor público. Otros programas que se ejecutan con tu usuario pueden acceder a los archivos del presupuesto.
+
+Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.

@@ -46,7 +46,7 @@ export function createApp(budget) {
   });
   app.use("/static", express.static(path.join(root, "public")));
   app.get('/agent-config', (_req,res) => {
-    res.attachment('cero-mcp.json').json({mcpServers:{'presupuesto-cero':{
+    res.attachment('nemein-mcp.json').json({mcpServers:{'nemein':{
       command:process.execPath,args:[path.join(root,'src','mcp.js')],env:{BUDGET_DATA_DIR:budget.dir}
     }}});
   });

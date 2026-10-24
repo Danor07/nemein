@@ -4,7 +4,7 @@ import { z } from "zod";
 import { openBudget } from "./core.js";
 const b = openBudget();
 await b.backup();
-const server = new McpServer({ name: "presupuesto-cero", version: "0.1.0" });
+const server = new McpServer({ name: "nemein", version: "0.1.0" });
 const out = (fn) => async (p) => {
   try {
     return { content: [{ type: "text", text: JSON.stringify(await fn(p)) }] };
