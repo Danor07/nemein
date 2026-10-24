@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nemein:schema:budget-changed:1",
+  "title": "Nemein budget changed payload v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation"
+  ],
+  "properties": {
+    "operation": {
+      "enum": [
+        "createAccount",
+        "addTransaction",
+        "allocate",
+        "transfer",
+        "reconcile",
+        "importCsv",
+        "categorize",
+        "createGroup",
+        "createCategory",
+        "deleteTransaction",
+        "setGoal",
+        "removeGoal",
+        "createRecurring",
+        "postRecurring",
+        "toggleRecurring"
+      ]
+    }
+  }
+}

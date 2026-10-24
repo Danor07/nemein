@@ -1,3 +1,4 @@
+import { attachEvents } from "./events.js";
 import Database from "better-sqlite3";
 import { planning } from "./planning.js";
 
@@ -484,5 +485,5 @@ export function openBudget(dir = defaultDir()) {
     },
     close: () => db.close(),
   };
-  return Object.assign(budget, planning(budget, { money, date, month, today }));
+  return attachEvents(Object.assign(budget, planning(budget, { money, date, month, today })));
 }

@@ -21,3 +21,11 @@ Si un agente consulta el presupuesto y utiliza un modelo en la nube, puede envia
 La aplicación está pensada para una persona en un equipo de confianza. No ofrece autenticación multiusuario y no debe exponerse mediante un proxy, túnel o servidor público. Otros programas que se ejecutan con tu usuario pueden acceder a los archivos del presupuesto.
 
 Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
+
+## Registro de eventos y seguimiento
+
+La base incluye un registro local de operaciones con identificadores, hora y tipo de operación. El evento no copia montos, comercios o argumentos originales; el snapshot consistente sí contiene información financiera. El registro se conserva sin purga automática por ahora y forma parte de los respaldos.
+
+BUDGET_EVENTS_READ=1 habilita lectura de eventos y snapshots para ese proceso de CLI/MCP; no concede escritura. El seguimiento sólo corre mientras la herramienta que lo inició está abierta. Para revocar esta concesión desde la configuración del cliente, detener y reiniciar el proceso sin la variable. Todavía no existe una pantalla de permisos granulares.
+
+La salida de la terminal y las respuestas MCP pueden ser guardadas o reenviadas por el consumidor. El cursor no es una contraseña ni un mecanismo de cifrado; el control de acceso local sigue dependiendo también de los permisos del sistema sobre el presupuesto.

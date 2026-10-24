@@ -1,7 +1,7 @@
 ---
 tipo: mapa
 actualizado: 2026-10-24
-verificado-en: 3408a3d
+verificado-en: 1c4cca5
 ---
 
 # Mapa de Nemein
@@ -40,3 +40,8 @@ verificado-en: 3408a3d
 - **v0.1.0 publicada** como pre-release en GitHub, con instalador NSIS, su checksum y una variante autofirmada (ver `VALIDACION.md` y `SIGNING.md`).
 - **Decidido por Igor:** ADR-0001 (permisos: por defecto nada), ADR-0002 (bandeja de propuestas) y ADR-0003 (Nemein como referencia para Resto-tech).
 - **Siguiente:** ver `Plan.md`.
+
+## Interoperabilidad
+
+- **Decidido por Igor:** [ADR-0004](Decisiones/ADR-0004-interoperabilidad-por-estandares.md), estándares para que cada usuario elija su workflow.
+- **Propuesta técnica:** [investigación de estándares y D33](Entender/Interoperabilidad.md). Orden y dependencias en [Plan.md](Plan.md).

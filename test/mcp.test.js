@@ -12,7 +12,7 @@ test("MCP real por stdio: lectura predeterminada y escritura explícita", async 
       const transport = new StdioClientTransport({
         command: process.execPath,
         args: [path.resolve("src/mcp.js")],
-        env: { ...process.env, BUDGET_DATA_DIR: dir, BUDGET_MCP_WRITE: write },
+        env: { ...process.env, BUDGET_DATA_DIR: dir, BUDGET_MCP_WRITE: write, BUDGET_EVENTS_READ: "0" },
       });
       const client = new Client({ name: "cero-test", version: "1.0" });
       try {

@@ -180,3 +180,33 @@ No se ejecutan pagos bancarios ni se registran recurrentes automáticamente. Reg
 MIT. Ver [LICENSE](LICENSE). Las dependencias mantienen sus respectivas licencias.
 
 Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
+
+## Eventos locales para workflows
+
+Esta versión del código agrega snapshot consistente, lectura paginada y seguimiento por terminal. El instalador v0.1.0 publicado todavía no contiene estos cambios.
+
+Habilitá la lectura para el proceso que conectás al presupuesto:
+
+```powershell
+$env:BUDGET_EVENTS_READ = '1'
+$cut = (.\nemein.cmd event-snapshot --file examples/consulta.json | ConvertFrom-Json).result
+.\nemein.cmd watch --after $cut.cursor
+```
+
+Conservá la proyección de $cut junto con su cursor. El snapshot reúne el presupuesto mensual, metas y recurrentes en un mismo corte. Cada cambio posterior aparece en el flujo aunque se haya registrado mientras se armaba ese snapshot.
+
+- event-snapshot recibe {month}; devuelve {version,cursor,snapshot,goals,recurring}.
+- events recibe {after,limit}; devuelve {version,events:[{cursor,event}],cursor,hasMore}. Límite predeterminado 100, máximo 1000.
+- watch acepta JSON, --file, --stdin o flags: --after CURSOR, --limit 100, --poll-ms 1000, --format ndjson|json-seq, --once.
+- --once entrega como máximo una página y termina; puede haber más eventos. Reanudar con el cursor del último registro entregado.
+- El modo continuo consulta cada segundo cuando está al día (intervalo entre 100 y 60000 ms); procesa páginas pendientes sin esa espera. Sólo se ejecuta mientras el usuario o su herramienta lo mantiene abierto.
+- Cada registro es {version:1,cursor,event}. JSON-seq usa RS + JSON + LF según RFC 7464; el sobre event es CloudEvents 1.0, y la envoltura con cursor es el contrato propio de Nemein.
+- stdout contiene sólo registros; errores JSON con code en stderr y salida no cero. Ctrl+C detiene el seguimiento. Un pipe cerrado (EPIPE) termina normalmente.
+- El consumidor guarda su cursor después de persistir lo procesado y deduplica por source + id. Los eventos indican qué operación ocurrió; para consultar saldos o detalles se usa otro snapshot.
+- Un cursor no es una credencial. Cursores incompatibles o historia incompleta producen errores explícitos; ver [el contrato](wiki/Modulos/Eventos.md).
+
+BUDGET_EVENTS_READ=1 es una concesión específica para leer el historial y snapshots de ese presupuesto en ese proceso. No habilita escritura. Quitar la variable de la configuración del cliente y reiniciar sus procesos revoca la concesión; la política granular P1 sigue pendiente.
+
+En MCP, esa misma variable agrega las herramientas snapshot_eventos y eventos. El seguimiento continuo es un comando de terminal; no imprime registros sueltos dentro del protocolo MCP. BUDGET_MCP_WRITE sigue controlando escritura por separado.
+
+Los contratos JSON están en src/contracts/. No se agregan endpoints HTTP ni servicios de nube.

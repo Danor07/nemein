@@ -14,3 +14,11 @@ Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en
 - Si cambia src, views o public, actualizar también ambos runtimes de escritorio antes de entregar: desktop-resources/runtime y src-tauri/target/release/runtime.
 
 Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
+
+## Eventos P4
+
+- Lectura opt-in: BUDGET_EVENTS_READ=1 para event-snapshot, events y watch en CLI, o snapshot_eventos y eventos en MCP. No se habilita con BUDGET_MCP_WRITE.
+- event-snapshot recibe {month} y devuelve proyección consistente con cursor. events recibe {after,limit}; límite máximo 1000.
+- watch --after CURSOR [--format ndjson|json-seq] [--once] sigue cambios por stdout. --once entrega una página. Persistir el cursor sólo después de procesar cada registro; deduplicar por source + id.
+- El cursor es posición, no permiso. Restauración o huecos pueden exigir nuevo snapshot. Ver wiki/Modulos/Eventos.md.
+- Esta concesión es por proceso/presupuesto; detener y reiniciar sin la variable para revocarla desde la configuración del cliente. P1 granular sigue pendiente.

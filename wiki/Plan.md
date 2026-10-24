@@ -1,7 +1,7 @@
 ---
 tipo: plan
 actualizado: 2026-10-24
-verificado-en: 3408a3d
+verificado-en: 1c4cca5
 ---
 
 # Plan de Nemein — qué se hace y en qué orden
@@ -16,6 +16,8 @@ verificado-en: 3408a3d
 - **Lo sugerido no se acepta solo:** toda importación o propuesta pasa por una revisión.
 - **Lógica separable y con vectores** (ADR-0003): lo que se traduce después a Resto-tech no se mezcla con lo propio de Nemein.
 
+- **Interoperabilidad por estándares:** [ADR-0004](Decisiones/ADR-0004-interoperabilidad-por-estandares.md). [Investigación y propuestas técnicas](Entender/Interoperabilidad.md).
+
 ## Lo hecho
 
 | | Qué | Dónde |
@@ -24,7 +26,11 @@ verificado-en: 3408a3d
 | ✅ | Renombre a Nemein, conservando los datos y los accesos anteriores | `46d9b71` |
 | ✅ | v0.1.0 para Windows x64 (pre-release), con instalador NSIS, checksum y variante autofirmada | `VALIDACION.md` · `SIGNING.md` |
 
-## Las propuestas, en orden
+## Propuestas y dependencias
+
+Los números son identificadores, no una secuencia obligatoria. **Orden recomendado (propuesta): contratos + P4a interno → P1 → exposición local de eventos / P4b.** P2 cubre las acciones que necesiten aprobación. P0 mantiene sus verificaciones pendientes. P3, P7 y P8 son adaptadores opcionales.
+
+Registrar hechos internamente puede empezar antes de P1; exponerlos a integraciones no concede acceso automáticamente.
 
 | # | Qué | Depende de | Estado |
 |---|---|---|---|
@@ -32,11 +38,12 @@ verificado-en: 3408a3d
 | P1 | Motor de permisos (ADR-0001) | — | decidido, sin empezar |
 | P2 | Bandeja de propuestas (ADR-0002) | P1 | decidido, sin empezar |
 | P3 | Formatos bancarios como plugins WASM | P1 | propuesta |
-| P4 | Tabla de eventos y `nemein watch` | — | propuesta |
+| P4 | Contratos, registro y `nemein watch` | concesión local explícita; P1 para granularidad | P4a utilizable con concesión explícita; P4b pendiente |
 | P5 | Respaldo con la app cerrada y en otro disco | — | propuesta |
 | P6 | Presupuestos separados por negocio | — | propuesta |
-| P7 | Leer avisos de pago por JMAP | P1, P6 | propuesta |
-| P8 | Importar OFX o CAMT.053 | P3 | sólo si un banco lo exporta |
+| P7 | Leer avisos de pago por JMAP | P1; P2 si propuesta remota | propuesta |
+| P8 | Importar OFX o camt.053 | contrato de importación | según archivos disponibles |
+| P9 | Portabilidad mediante CLI, MCP y archivos | contratos comunes | propuesta; HTTP aplazado |
 
 ### P0 — Cerrar lo pendiente de la v0.1.0
 - **Qué:** lo que `VALIDACION.md` dejó sin verificar.
@@ -67,7 +74,7 @@ verificado-en: 3408a3d
   5. **Entrega** (recomendación, sin decidir):
      - mDNS/DNS-SD para encontrar al que escribe en la red local;
      - el que propone consulta cada cierto tiempo, con reintentos cada vez más espaciados;
-     - opcionalmente, una conexión abierta (Server-Sent Events) para que llegue al instante.
+     - el transporte entre dispositivos queda por definir; SSE/HTTP está aplazado y no forma parte del alcance actual.
 
      **La corrección nunca depende de un aviso:** los avisos sólo lo hacen más rápido. El «se apagó» no se puede recibir: con un corte de luz no hay despedida, sólo se deduce por falta de respuesta.
   6. **Los hechos no se rechazan, se observan:** un movimiento que ya pasó no se «rechaza»; se le agrega una observación.
@@ -78,14 +85,27 @@ verificado-en: 3408a3d
   - **sólo WebAssembly:** el aislamiento de Node (`vm`) no es una barrera de seguridad, y su propia documentación lo aclara;
   - el plugin tiene **una sola capacidad**: leer el archivo que se le pasa. Sin red, sin acceso a la base. Es el primer caso real del motor (P1);
   - el core valida lo que devuelve con las mismas reglas de hoy, y la importación sigue pasando por la revisión existente;
-  - los plugins se pueden compartir porque no pueden hacer daño fuera de su caja.
+  - definir primero el contrato JSON Schema de importación. WASM no es requisito para importadores incorporados; limitar memoria, tiempo y salida, y validar semántica. El aislamiento no garantiza por sí solo que un plugin sea seguro.
 
-### P4 — Tabla de eventos y `nemein watch`
-- **Qué:** que un tablero o un script local se entere cuando algo cambia.
-- **Cómo, más o menos:**
-  - cada cambio del motor escribe una fila en una tabla de eventos, **en la misma transacción** (el patrón outbox, D33 de Resto-tech);
-  - `nemein watch` lee esa tabla por número y emite JSON por stdout.
-  - **No sirven los avisos de cambio de SQLite:** funcionan sólo dentro de una misma conexión, y la ventana, la CLI y el MCP son procesos distintos.
+### P4 — Contratos, registro transaccional y lectura reanudable
+
+**P4a implementado para uso local con concesión explícita:** registro, cursores, snapshot, lectura por CLI/MCP y watch; [contratos, evidencia y límites](Modulos/Eventos.md). Pendientes política granular P1 y entrega por destino P4b. [Fundamento](Entender/Interoperabilidad.md).
+
+**P4a — implementado con límites documentados**
+- Empezar por contratos de comportamiento inspirados en [Design by Contract](Entender/Interoperabilidad.md#design-by-contract-como-inspiración): precondiciones, postcondiciones e invariantes por operación, con casos de éxito, rechazo y fallo. JSON Schema complementa esos contratos describiendo los datos.
+- Catálogo de hechos y JSON Schema 2020-12; sobre CloudEvents 1.0.2 (specversion "1.0"), identidad estable y secuencia local separadas.
+- Migración del registro y evento en la misma transacción que cada mutación del motor, incluidas sentencias individuales y llamadas anidadas. Nunca registrar desde la ruta HTTP después del commit.
+- **Implementado:** CLI event-snapshot, events y watch --after; MCP snapshot_eventos y eventos. Requieren BUDGET_EVENTS_READ=1 independientemente del permiso de escritura. JSON por línea o json-seq RFC 7464; el consumidor persiste su cursor después de procesar. Revocar la concesión externa requiere reiniciar el proceso sin esa variable; no sustituye P1.
+- **Implementado internamente:** snapshot mensual + metas + recurrentes en una transacción de lectura con su cursor; páginas reanudables y acotadas; detección de presupuesto ajeno, anclaje perdido/divergente y huecos. Sin purga automática. Restauraciones que conservan el prefijo leído mantienen el cursor; no se promete detectar toda copia como una generación nueva.
+- Persistencia y pruebas internas antes de P1; exposición a integraciones después de P1 o con autorización explícita y acotada equivalente. No convertir el permiso global de escritura en permiso para leer todo el historial.
+- **Aceptación:** rollback sin evento huérfano; visibilidad conjunta desde otra conexión después del commit; reinicio sin pérdida; replay/deduplicación; aislamiento entre presupuestos; revocación; consumidor lento; restauración/cursor inválido; cobertura UI/CLI/MCP.
+- Bases temporales. El registro no sustituye tablas contables ni auditoría de permisos.
+
+**P4b — entrega por destino cuando exista un adaptador**
+- Depende de P4a y P1; P2 para acciones que necesiten aprobación.
+- Estado por destino: pendiente, intento, confirmado/error; reintentos espaciados y acotados, pausa y recuperación manual.
+- Red afuera de la transacción; un destino caído no bloquea el presupuesto ni los demás. Deduplicación/idempotencia acordadas con el receptor; no prometer exactly-once.
+- Separación D33: fila durable en la transacción, worker después. Sin bus interno ni framework genérico anticipado.
 
 ### P5 — Respaldo con la app cerrada y en otro disco
 - **Qué:** hoy no se respalda con la app cerrada, y las copias quedan en el mismo disco.
@@ -103,8 +123,8 @@ verificado-en: 3408a3d
 ### P7 — Leer avisos de pago por JMAP
 - **Qué:** que los pagos que llegan por correo se carguen sin depender de una IA.
 - **Cómo, más o menos:**
-  - JMAP es la API estándar de Fastmail;
-  - **un token de API sólo de lectura,** que pega el usuario y que queda fuera del repo;
+  - JMAP Core RFC 8620 y Mail RFC 8621: cualquier proveedor compatible; descubrir capacidades;
+  - credenciales fuera del repo con el mínimo alcance soportado; filtrar una carpeta no necesariamente limita el token;
   - **sólo una carpeta:** una regla del correo lleva los avisos a «Pagos», y sólo esa se lee;
   - **cuándo leer:** al abrir la app y cada hora mientras está abierta. La casilla es la cola, así que no hace falta webhook ni ningún servidor público;
   - **una regla fija por remitente,** y el número de operación como llave, para que nada se cargue dos veces;
@@ -113,11 +133,19 @@ verificado-en: 3408a3d
 
 ### P8 — Importar OFX o CAMT.053
 - **Qué:** los formatos estándar de extracto (OFX, e ISO 20022 `camt.053`).
-- **Cómo, más o menos:** como un plugin más de P3. **Sólo si algún banco que usemos los exporta;** casi todos los bancos paraguayos dan Excel, PDF o CSV.
+- **Cómo, más o menos:** con el contrato común de importación, como adaptador incorporado o plugin P3. Fijar versiones y probar muestras sanitizadas; disponibilidad por banco pendiente de verificar. No requiere WASM.
 
-## No recomendado (recomendaciones de Claude; Igor no las decidió)
+### P9 — Portabilidad mediante CLI, MCP y archivos
+
+**Propuesta, sin implementar.** Contrato común de acciones, resultados y errores, con versiones y exportación de configuraciones sin secretos.
+- Mantener CLI y MCP stdio; declarar revisiones soportadas y probar clientes independientes, sin duplicar validaciones del dominio.
+- Exportaciones CSV/JSON documentadas, con signos, unidades y fechas; pruebas de ida y vuelta con datos ficticios. Backup SQLite no sustituye formato público.
+- **Alcance indicado por Igor:** HTTP/OpenAPI queda aplazado, junto con SSE como transporte de integración. No es requisito de P4 ni del principio de interoperabilidad. Reconsiderarlo sólo si aparece una necesidad concreta; no equivale a retirar el servidor local existente de la interfaz.
+- Design by Contract es inspiración para el comportamiento del núcleo; no implica adoptar Eiffel ni crear un framework de contratos.
+
+## Recomendaciones revisadas (no son decisiones de Igor)
 
 - **Un proceso de fondo siempre prendido:** contradice «liviano». Para lo programado alcanza con el Programador de tareas (P5).
-- **Importar solo lo que cae en una carpeta:** contradice «lo sugerido no se acepta solo». A lo sumo, proponerlo al abrir la app.
+- **Vigilar una carpeta:** puede preparar propuestas; detectar un archivo no equivale a aceptar movimientos. Respetar permisos y revisión.
 - **Sincronizar dispositivos con CRDTs:** fusionan los conflictos solos, y con plata eso puede dejar un saldo mal sin que nadie lo vea. Además choca con la conciliación, que congela lo conciliado. Si hace falta otro dispositivo, uno escribe y los demás proponen (P2).
-- **Una API REST con OpenAPI para Nemein:** la CLI con JSON y el MCP por stdio ya cubren a agentes y scripts sin abrir un puerto.
+- **HTTP/OpenAPI:** aplazado por indicación de Igor; alcance vigente en P9.

@@ -25,3 +25,14 @@
 - Una copia temporal con un byte modificado se identifica como HashMismatch; esa copia no se ejecuta ni se distribuye.
 - El certificado público exportado no contiene clave privada. No se agrega a los almacenes de raíces de confianza.
 - El instalador original y su checksum se conservan. La variante autofirmada tiene nombre y checksums propios; ver SIGNING.md.
+
+## P4a — eventos locales, cursores y seguimiento (24/10/2026)
+
+- Suite actual: 30 pruebas aprobadas, 0 fallos, sobre presupuestos temporales.
+- Mutación/evento en una transacción; fallo inducido de INSERT y rollback; agrupación de importaciones y recurrentes.
+- Snapshot consistente bajo escrituras concurrentes; páginas y replay; rechazo de cursores incompatibles, ramas divergentes y huecos de historial.
+- CLI event-snapshot/events/watch: permiso explícito, opciones, JSON/archivo/stdin, NDJSON y JSON-seq, salida lenta, cancelación y pipe cerrado.
+- MCP: herramientas de eventos bajo concesión específica, sin habilitar escritura.
+- Salida abrupta de proceso sin cerrar SQLite: operación sin commit no persiste y operación confirmada conserva su evento. No simula corte eléctrico o daño de disco.
+- No hay nuevos endpoints HTTP, política granular P1, entrega externa P4b ni instalador nuevo publicado.
+- Verificación final de P4a: ejecutable Tauri con runtime actualizado arranca en presupuesto temporal, responde HTTP 200 y sirve Chart.js local. Launcher nemein.cmd help enumera los nuevos comandos. No se recompiló ni publicó un instalador nuevo.
