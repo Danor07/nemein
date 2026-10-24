@@ -9,7 +9,7 @@ Aplicación de presupuesto base cero en guaraníes enteros. Interfaz de escritor
 
 ## Descargar para Windows
 
-La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador todavía no tiene firma digital.
+La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador original no tiene firma. También se ofrece una variante `selfsigned`, firmada con un certificado autofirmado de Innova-tech; Windows no confía en él automáticamente. Ver [firma de código](SIGNING.md).
 
 Los archivos de la release incluyen `SHA256SUMS.txt` para verificar la integridad. El instalador y el código fuente no contienen bases de datos ni configuración personal.
 

@@ -18,3 +18,10 @@
 - Instalador NSIS generado con licencia MIT, privacidad, licencia de Node y avisos de las dependencias Rust. Bases SQLite, respaldos y configuración MCP personal excluidos.
 - Hash SHA-256 publicado junto al instalador.
 - No se ejecutó una instalación mediante el asistente NSIS en el sistema ni se comprobó una instalación en un equipo limpio. El instalador no tiene firma digital. La inspección visual completa sigue pendiente.
+## Variante autofirmada de v0.1.0
+
+- Certificado de firma de código autofirmado con sujeto CN=Innova-tech, RSA 3072 y SHA-256; clave privada no exportable en el almacén personal del usuario.
+- Ejecutable firmado con sello de tiempo RFC 3161. Windows informa falta de confianza en la raíz, como corresponde a un certificado autofirmado no importado como confiable.
+- Una copia temporal con un byte modificado se identifica como HashMismatch; esa copia no se ejecuta ni se distribuye.
+- El certificado público exportado no contiene clave privada. No se agrega a los almacenes de raíces de confianza.
+- El instalador original y su checksum se conservan. La variante autofirmada tiene nombre y checksums propios; ver SIGNING.md.
