@@ -1,6 +1,7 @@
 export default {
   mutate: [
     "src/policy.js",
+    "src/sqlite-startup.js",
     "src/credentials.js",
     "src/agent-config.js",
     "scripts/mutation-gate.js",
@@ -8,7 +9,7 @@ export default {
   testRunner: "command",
   commandRunner: {
     command:
-      "node --test test/properties/policy.property.test.js test/credentials.test.js test/agent-config.test.js test/mutation-gate.test.js",
+      "node --test test/properties/policy.property.test.js test/credentials.test.js test/agent-config.test.js test/mutation-gate.test.js test/sqlite-startup.test.js",
   },
   coverageAnalysis: "off",
   concurrency: 2,
@@ -26,6 +27,7 @@ export default {
     "!test/agent-config.test.js",
     "!test/helpers/installed.js",
     "!test/mutation-gate.test.js",
+    "!test/sqlite-startup.test.js",
     "!scripts/mutation-gate.js",
     "!package.json",
   ],

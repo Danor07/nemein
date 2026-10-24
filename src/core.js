@@ -1,4 +1,5 @@
 import { migrate } from "./migrations.js";
+import { enableWal } from "./sqlite-startup.js";
 import { attachAccess } from "./access.js";
 import { attachEvents } from "./events.js";
 import Database from "better-sqlite3";
@@ -67,7 +68,7 @@ export function openBudget(dir = defaultDir()) {
     db.pragma("busy_timeout = 5000");
     db.pragma("foreign_keys = ON");
     migrate(db);
-    db.pragma("journal_mode = WAL");
+    enableWal(db);
   } catch (error) {
     db.close();
     throw error;

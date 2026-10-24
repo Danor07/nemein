@@ -1,4 +1,10 @@
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  readFileSync,
+  openSync,
+  closeSync,
+} from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 export function saveCredential(dataDir, token) {
@@ -11,6 +17,11 @@ export function saveCredential(dataDir, token) {
       windowsHide: true,
     }).match(/S-1-5-(?:\d+-)*\d+/)?.[0];
     if (!sid) throw Error("Cannot identify credential owner");
+    // Remove explicit entries as well as inherited ones before storing a secret.
+    execFileSync("icacls.exe", [dir, "/reset"], {
+      stdio: "pipe",
+      windowsHide: true,
+    });
     execFileSync(
       "icacls.exe",
       [
@@ -24,11 +35,18 @@ export function saveCredential(dataDir, token) {
     );
   }
   const file = path.join(dir, "connection.env");
-  writeFileSync(file, "BUDGET_AGENT_TOKEN=" + token + "\n", {
-    encoding: "utf8",
-    mode: 0o600,
-    flag: "wx",
-  });
+  const descriptor = openSync(file, "wx", 0o600);
+  try {
+    // Windows may add explicit Administrators access when creating a file.
+    if (process.platform === "win32")
+      execFileSync("icacls.exe", [file, "/reset"], {
+        stdio: "pipe",
+        windowsHide: true,
+      });
+    writeFileSync(descriptor, "BUDGET_AGENT_TOKEN=" + token + "\n", "utf8");
+  } finally {
+    closeSync(descriptor);
+  }
   return file;
 }
 
