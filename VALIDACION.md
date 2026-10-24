@@ -72,3 +72,7 @@
 - Se mantienen los rechazos de Origin:null, origen ajeno, otro puerto, Host ajeno y CSRF inválido. No se agregan excepciones para WebView ni se elimina la guarda de origen.
 - Ejecutable 0.2.1 compilado y comprobado con presupuesto temporal: HTTP 200, Chart.js local y cierre del motor.
 - La automatización de ventanas Windows no respondió; el clic se verificó en navegador y el arranque nativo mediante la prueba de escritorio.
+- Instalación local 0.2.1 confirmada por registro NSIS y runtime. Firma de aplicación e instalador de Innova-tech con sello de tiempo; raíz autofirmada sin confianza pública automática.
+- Presupuesto existente respaldado antes de actualizar. Migración real al esquema 5 verificada comparando huellas de todos los registros previos, sin diferencias.
+- MCP de la instalación comprobado con datos temporales: denegación inicial, lectura concedida, aprobación de propuesta y revocación. Arranque y cierre nativo instalado comprobados con presupuesto temporal.
+- Archivos del código instalado comparados con el checkout. La release pública 0.2.0 no se modifica y 0.2.1 no se publica en esta etapa.
