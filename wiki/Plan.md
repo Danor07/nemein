@@ -28,7 +28,7 @@ verificado-en: 1c4cca5
 
 ## Propuestas y dependencias
 
-Los números son identificadores, no una secuencia obligatoria. **Orden recomendado (propuesta): contratos + P4a interno → P1 → exposición local de eventos / P4b.** P2 cubre las acciones que necesiten aprobación. P0 mantiene sus verificaciones pendientes. P3, P7 y P8 son adaptadores opcionales.
+Los números son identificadores, no una secuencia obligatoria. **Siguiente: P1 (permisos granulares) → P2 (bandeja de propuestas).** P4a ya es utilizable con concesión explícita. P4b se implementará cuando exista un destino concreto. P2 cubre las acciones que necesiten aprobación. P0 mantiene sus verificaciones pendientes. P3, P7 y P8 son adaptadores opcionales.
 
 Registrar hechos internamente puede empezar antes de P1; exponerlos a integraciones no concede acceso automáticamente.
 

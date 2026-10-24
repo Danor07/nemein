@@ -45,10 +45,12 @@ export function createApp(budget) {
     next();
   });
   app.use("/static", express.static(path.join(root, "public")));
+  const agentConfig = () => ({mcpServers:{nemein:{
+    command:process.execPath,args:[path.join(root,'src','mcp.js')],env:{BUDGET_DATA_DIR:budget.dir}
+  }}});
+  app.locals.agentConfig = agentConfig;
   app.get('/agent-config', (_req,res) => {
-    res.attachment('nemein-mcp.json').json({mcpServers:{'nemein':{
-      command:process.execPath,args:[path.join(root,'src','mcp.js')],env:{BUDGET_DATA_DIR:budget.dir}
-    }}});
+    res.attachment('nemein-mcp.json').json(agentConfig());
   });
   app.get("/static/chart.js", (_req, res) =>
     res.sendFile('chart.umd.js', {root:path.join(root, 'node_modules/chart.js/dist')}),

@@ -36,3 +36,9 @@
 - Salida abrupta de proceso sin cerrar SQLite: operación sin commit no persiste y operación confirmada conserva su evento. No simula corte eléctrico o daño de disco.
 - No hay nuevos endpoints HTTP, política granular P1, entrega externa P4b ni instalador nuevo publicado.
 - Verificación final de P4a: ejecutable Tauri con runtime actualizado arranca en presupuesto temporal, responde HTTP 200 y sirve Chart.js local. Launcher nemein.cmd help enumera los nuevos comandos. No se recompiló ni publicó un instalador nuevo.
+## Descarga MCP — respuesta visible (24/10/2026)
+
+- Reproducción en Tauri con presupuesto temporal: descarga real válida en Descargas; faltaba aviso en la página.
+- Se verifica cabecera Content-Disposition y que el JSON desplegable coincide con la descarga. Suite completa 30/30 aprobada.
+- Interacción en navegador local: el clic actualiza el estado accesible y la alternativa muestra el JSON. La ventana Tauri corregida arrancó; la herramienta de automatización no pudo completar allí los clics por falta de geometría, por lo que la comprobación del nuevo estado se hizo en el navegador local.
+- Fuente y runtimes actualizados; sin recompilación Rust ni nuevo instalador.

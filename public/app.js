@@ -132,3 +132,9 @@ document.querySelectorAll('.table-wrap table').forEach(table => {
   const labels = [...table.querySelectorAll('thead th')].map(th => th.textContent);
   table.querySelectorAll('tbody tr:not(.group),tfoot tr').forEach(row => [...row.querySelectorAll('td')].forEach((td,i) => td.dataset.label = labels[i] || ''));
 });
+
+// WebView downloads can finish without showing browser download UI.
+document.querySelector("[data-mcp-download]")?.addEventListener("click", () => {
+  document.querySelector("#mcp-download-status").textContent =
+    "Descarga solicitada. Buscá nemein-mcp.json en Descargas; puede aparecer con un número.";
+});

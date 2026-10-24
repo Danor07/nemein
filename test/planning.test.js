@@ -56,7 +56,16 @@ test('pantallas nuevas, configuración MCP y recurrentes por HTTP',async t=>{
  for(const view of ['home','planning','agents']) {
   const res=await fetch(base+'/?view='+view); assert.equal(res.status,200,await res.text());
  }
- const cfg=await (await fetch(base+'/agent-config')).json();
+ const download=await fetch(base+'/agent-config');
+ assert.equal(download.status,200);
+ assert.match(download.headers.get('content-disposition'),/attachment; filename="?nemein-mcp\.json"?/);
+ const cfg=await download.json();
+ const agents=await (await fetch(base+'/?view=agents')).text();
+ assert.match(agents,/download="nemein-mcp.json" data-mcp-download/);
+ assert.match(agents,/id="mcp-download-status"[^>]*role="status"/);
+ assert.match(agents,/Ver configuración para copiar/);
+ const inline=agents.match(/<pre>([\s\S]*?)<\/pre>/)[1].replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n))).replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('&amp;','&');
+ assert.deepEqual(JSON.parse(inline),cfg);
  assert.equal(cfg.mcpServers['nemein'].env.BUDGET_DATA_DIR,b.dir);
  const html=await (await fetch(base+'/?view=planning')).text();
  const _csrf=html.match(/name="_csrf" value="([^"]+)"/)[1];
