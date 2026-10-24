@@ -46,7 +46,7 @@ jobs:
   native-static:
     name: Native static gate
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       RUSTUP_TOOLCHAIN: 1.99.1
     steps:
@@ -65,3 +65,10 @@ jobs:
       - run: npm run desktop:prepare
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+
+      - name: Build Windows installer for clean-machine smoke
+        run: node node_modules/@tauri-apps/cli/tauri.js build --bundles nsis
+      - name: Silent install, shortcut, installed MCP and credential verification
+        run: |
+          $nemeinVersion = (Get-Content package.json | ConvertFrom-Json).version
+          ./scripts/smoke-installed.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe"

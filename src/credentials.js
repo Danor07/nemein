@@ -11,19 +11,27 @@ export function saveCredential(dataDir, token) {
   if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token))
     throw Error("Invalid connection credential");
   const dir = mkdtempSync(path.join(dataDir, "credential-"));
+  const system32 =
+    process.platform === "win32"
+      ? path.join(process.env.SystemRoot, "System32")
+      : null;
   if (process.platform === "win32") {
-    const sid = execFileSync("whoami.exe", ["/user", "/fo", "csv", "/nh"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).match(/S-1-5-(?:\d+-)*\d+/)?.[0];
+    const sid = execFileSync(
+      path.join(system32, "whoami.exe"),
+      ["/user", "/fo", "csv", "/nh"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+      },
+    ).match(/S-1-5-(?:\d+-)*\d+/)?.[0];
     if (!sid) throw Error("Cannot identify credential owner");
     // Remove explicit entries as well as inherited ones before storing a secret.
-    execFileSync("icacls.exe", [dir, "/reset"], {
+    execFileSync(path.join(system32, "icacls.exe"), [dir, "/reset"], {
       stdio: "pipe",
       windowsHide: true,
     });
     execFileSync(
-      "icacls.exe",
+      path.join(system32, "icacls.exe"),
       [
         dir,
         "/inheritance:r",
@@ -39,7 +47,7 @@ export function saveCredential(dataDir, token) {
   try {
     // Windows may add explicit Administrators access when creating a file.
     if (process.platform === "win32")
-      execFileSync("icacls.exe", [file, "/reset"], {
+      execFileSync(path.join(system32, "icacls.exe"), [file, "/reset"], {
         stdio: "pipe",
         windowsHide: true,
       });

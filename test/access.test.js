@@ -439,3 +439,26 @@ test("P1: concurrent processes migrate the audit schema safely", async (t) => {
     reopened.close();
   }
 });
+
+test("P1: malformed restored fallback cannot bypass transaction limits", (t) => {
+  const { b, connection, agent, grant } = fixture(t);
+  const account = b.createAccount({
+    name: "Preserve",
+    type: "efectivo",
+    balance: 100,
+  });
+  grant("transaction", "allow", { max_amount: 0 });
+  const before = b.snapshot("2026-10");
+  for (const otherwise of ["allow", "invalid", true, 1, {}, []]) {
+    b.db
+      .prepare(
+        "UPDATE agent_rules SET conditions=? WHERE connection_id=? AND action='transaction'",
+      )
+      .run(JSON.stringify({ max_amount: 0, otherwise }), connection.id);
+    assert.throws(
+      () => agent.addTransaction(payment(account.id)),
+      coded("PERMISSION_DENIED"),
+    );
+    assert.deepEqual(b.snapshot("2026-10"), before);
+  }
+});

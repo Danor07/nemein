@@ -148,3 +148,35 @@ test("PBT: unconstrained decisions, defaults and invalid money stay explicit", (
     options,
   );
 });
+
+test("PBT: invalid fallbacks cannot authorize an out-of-bounds request", () => {
+  fc.assert(
+    fc.property(
+      fc
+        .oneof(fc.constant("allow"), fc.jsonValue())
+        .filter((v) => v !== "ask" && v !== "deny"),
+      fc.integer({ min: 0, max: 1000000 }),
+      (otherwise, limit) =>
+        result(
+          {
+            actor,
+            rule: rule("allow", { max_amount: limit, otherwise }),
+            action: "transaction",
+            args: { amount: limit + 1 },
+          },
+          "deny",
+        ),
+    ),
+    options,
+  );
+  for (const otherwise of ["allow", "unknown", true, 1, null, {}, []])
+    result(
+      {
+        actor,
+        rule: rule("ask", { account_id: 1, otherwise }),
+        action: "transaction",
+        args: { account_id: 2, amount: 1 },
+      },
+      "deny",
+    );
+});

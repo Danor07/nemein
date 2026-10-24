@@ -25,7 +25,7 @@ export function decide(rule, action, p) {
   if (c.account_id !== undefined)
     matches = matches && Number(p[actions[action].account]) === c.account_id;
   return {
-    decision: matches ? rule.decision : c.otherwise || "deny",
+    decision: matches ? rule.decision : c.otherwise === "ask" ? "ask" : "deny",
     reason: matches
       ? "Regla de la conexión"
       : "Fuera de los límites de la regla",

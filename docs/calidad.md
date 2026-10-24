@@ -14,7 +14,7 @@ npm run quality ejecuta en orden:
 
 Las semillas están fijadas en cada propiedad. Un fallo informa seed, path y contraejemplo reducido. No sustituir una propiedad fallida por un ejemplo que la haga pasar.
 
-La mutación cubre src/policy.js, src/agent-config.js, src/credentials.js, src/sqlite-startup.js y scripts/mutation-gate.js. La CI Linux detectó 397 de 416 mutantes: 95,43 %, con 19 supervivientes, sin timeouts, errores ni mutantes sin cobertura. El reporte conserva los supervivientes para revisión; este score no representa toda la aplicación.
+La mutación cubre src/policy.js, src/agent-config.js, src/credentials.js, src/sqlite-startup.js, public/mcp-download.js y scripts/mutation-gate.js. La medición anterior, sobre cinco módulos en fca6ad5, detectó 397 de 416 mutantes: 95,43 %, con 19 supervivientes, sin timeouts, errores ni mutantes sin cobertura. El reporte conserva los supervivientes para revisión; este score no representa toda la aplicación.
 
 El primer intento sobre los cuatro módulos anteriores dio 84,11 % y fue rechazado. La medición local posterior sobre esos cuatro módulos alcanzó 95,08 % (348/366). Se agregaron pruebas de formato de credenciales, rutas, fallbacks, enlaces, ACL y ejecución del gate. El recorrido de ancestros usa una lista finita para evitar los mutantes con bucles infinitos. No se redujo el umbral ni se excluyeron operadores.
 
@@ -39,3 +39,11 @@ Para impedir merges con checks fallidos, configurar protección de rama con Qual
 Los cambios de workflow, generadores, umbrales e invariantes requieren revisión humana. Que el mismo agente genere código y pruebas no proporciona independencia. El fuzzing actual es generativo y acotado, no una campaña guiada por cobertura.
 
 Los reportes de mutación se conservan como artefactos incluso cuando falla el umbral. Un score alto no prueba ausencia de defectos. La auditoría de dependencias se verifica aparte de este gate; las actualizaciones afectadas de csv-parse, zod y dependencias indirectas se validaron con la suite y la auditoría local actual.
+
+## Instalación Windows y comportamiento visible
+
+El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo y comprueba archivos, registro de desinstalación, destino del acceso del menú Inicio, handshake MCP desde el runtime instalado, credenciales y arranque nativo. El script impide ejecutarlo como instalador local fuera del runner efímero. Este ensayo no publica el paquete y no usa el certificado privado de distribución. La variante autofirmada se verifica por separado.
+
+Las herramientas whoami.exe e icacls.exe se resuelven en SystemRoot/System32, independientemente del PATH o de Git Bash. El evaluador puro niega fallbacks distintos de ask/deny, incluso si una regla antigua evitó la validación de guardado; lo cubren propiedades y una regresión por el llamador real.
+
+El botón MCP anuncia preparación, evita envíos duplicados, conserva el ancho entre estados y permite reintentar un error persistente. Una respuesta HTTP correcta sólo confirma que el archivo fue preparado y que se solicitó guardarlo; no se afirma que el navegador lo escribió en disco. Se conserva la alternativa de ver/copiar y se prueban submit, errores HTTP y de red.
