@@ -89,10 +89,18 @@
 ## Cierre de CI y paquete 0.2.2 (24/10/2026)
 
 - CI sobre fca6ad5: Quality gate Linux y Native static gate Windows aprobados. Incluye AST/linter, regresiones, propiedades, fuzzing, mutación, rustfmt y Clippy sin advertencias.
-- En cada plataforma: 86 pruebas, 85 aprobadas y una omisión específica del sistema. Linux omite ACL Windows; Windows omite creación de symlink de archivo sin privilegio. Las dos fronteras se ejecutan en su plataforma compatible.
+- Sobre fca6ad5: Windows del runner aprobó 86/86 sin omisiones; Linux aprobó 85/86 y omitió sólo ACL Windows. El entorno Windows local aprobó 85/86 y omitió creación de symlink de archivo por falta de privilegio. No se confunden las capacidades del runner con las del equipo local.
 - Mutación Linux: 397/416 detectados, 95,43 %, 19 supervivientes, sin timeouts, errores ni casos sin cobertura.
 - El primer job Windows rechazó permisos adicionales de Administradores en la credencial y SQLITE_BUSY durante el cambio concurrente a WAL. Se corrigen ambos: ACL antes de escribir el secreto y reintento acotado del arranque. No se modifica SQL histórico ni se relajan tests.
 - MCP del runtime empaquetado: versión 0.2.2, 22 herramientas, archivo de credencial prioritario sobre variable heredada, denegación inicial, lectura concedida y denegación posterior. Prueba con datos ficticios. Los 32 archivos de aplicación coinciden con el checkout; payload sin datos privados ni herramientas de desarrollo.
 - Ejecutable nativo 0.2.2 con runtime actualizado: HTTP 200, Chart.js local y cierre del motor. Configuración visible comprobada en navegador con conexión ficticia, sin token. Chrome bloqueó el envío de descarga de la prueba; su respuesta y contenido se verificaron por el test HTTP. No se eludió el bloqueo del navegador.
 - La instalación 0.2.1 desde el Explorador fue confirmada por el usuario. Las afirmaciones históricas de instalación y registro comprobadas dentro de Codex/MSIX no equivalen a una instalación normal de Windows. Instalar 0.2.2 desde el Explorador y renovar/re-enlazar la configuración sigue siendo un paso manual pendiente.
 - La prueba en equipo limpio y la instalación 0.2.2 fuera de MSIX siguen pendientes. No se hizo merge ni se publicó una release nueva; protección de rama administrativa no configurada por esta tarea.
+
+## Revisión posterior y respuesta del botón (24/10/2026)
+
+- whoami.exe e icacls.exe usan SystemRoot/System32; credenciales comprobadas también desde Git Bash.
+- Propiedad con otherwise inválido y regresión por el llamador real: una regla restaurada no puede permitir operaciones fuera de sus límites.
+- El job Windows incorpora compilación de NSIS, instalación silenciosa en runner nuevo, registro, destino del acceso directo, MCP instalado, credenciales y arranque nativo. Su resultado se revisa antes de fusionar.
+- Medición visual efectiva: 1441 × 900 y 360 × 800, sin desborde horizontal. El botón conserva 222,295 px en escritorio y 249,272 px en celular entre reposo y preparación. Se corrigió un salto de 8 px detectado al aparecer el ícono.
+- Clic y Enter comprobados en navegador con datos ficticios. Revocar la conexión desde otra vista causa un error persistente con role=alert y Reintentar; el botón conserva su ancho. La prueba no afirma una escritura en disco que el navegador no puede confirmar.
