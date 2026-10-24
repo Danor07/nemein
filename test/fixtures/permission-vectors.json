@@ -1,0 +1,170 @@
+[
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": null,
+    "action": "snapshot",
+    "args": {},
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 0,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {}
+    },
+    "action": "snapshot",
+    "args": {},
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "b",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {}
+    },
+    "action": "snapshot",
+    "args": {},
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "2"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {}
+    },
+    "action": "snapshot",
+    "args": {},
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {
+        "max_amount": 100,
+        "otherwise": "ask"
+      }
+    },
+    "action": "transaction",
+    "args": {
+      "amount": -100
+    },
+    "expected": "allow"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {
+        "max_amount": 100,
+        "otherwise": "ask"
+      }
+    },
+    "action": "transaction",
+    "args": {
+      "amount": -101
+    },
+    "expected": "ask"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "deny",
+      "conditions": {
+        "max_amount": 100,
+        "otherwise": "ask"
+      }
+    },
+    "action": "transaction",
+    "args": {
+      "amount": -101
+    },
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 1,
+      "decision": "allow",
+      "conditions": {
+        "account_id": 3,
+        "otherwise": "deny"
+      }
+    },
+    "action": "transaction",
+    "args": {
+      "account_id": 4,
+      "amount": -5
+    },
+    "expected": "deny"
+  },
+  {
+    "actor": {
+      "id": "a",
+      "active": 1,
+      "version": "1"
+    },
+    "rule": {
+      "connection_id": "a",
+      "connection_version": "1",
+      "action_version": 2,
+      "decision": "allow",
+      "conditions": {}
+    },
+    "action": "snapshot",
+    "args": {},
+    "expected": "deny"
+  }
+]

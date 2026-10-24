@@ -24,8 +24,9 @@ function registeredInstalls() {
 }
 export function installedAgentConfig(
   dataDir,
-  { runtimeRoot, installDirs } = {},
+  { runtimeRoot, installDirs, agentToken, connectionVersion = "1" } = {},
 ) {
+  if (!agentToken) return null;
   const roots = installDirs ?? [
     runtimeRoot && path.dirname(runtimeRoot),
     process.env.NEMEIN_INSTALL_DIR,
@@ -65,12 +66,25 @@ export function installedAgentConfig(
           .name !== "nemein"
       )
         continue;
+      const pkg = JSON.parse(
+        readFileSync(path.join(runtime, "package.json"), "utf8"),
+      );
+      const [major, minor] = (pkg.version || "").split(".").map(Number);
+      if (
+        !existsSync(path.join(runtime, "src", "access.js")) ||
+        !(major > 0 || (major === 0 && minor >= 2))
+      )
+        continue;
       return {
         mcpServers: {
           nemein: {
             command,
             args: [script],
-            env: { BUDGET_DATA_DIR: dataDir },
+            env: {
+              BUDGET_DATA_DIR: dataDir,
+              BUDGET_AGENT_TOKEN: agentToken,
+              BUDGET_AGENT_VERSION: connectionVersion,
+            },
           },
         },
       };

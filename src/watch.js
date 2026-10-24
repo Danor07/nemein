@@ -1,5 +1,5 @@
 import { setTimeout } from "node:timers/promises";
-import { execute, assertEventRead } from "./commands.js";
+import { execute } from "./commands.js";
 
 function invalid(message) {
   return Object.assign(new Error(message), { code: "INVALID_WATCH_OPTIONS" });
@@ -70,8 +70,18 @@ export async function watchEvents(budget, options, { signal, write } = {}) {
   const p = watchOptions(options);
   let after = p.after;
   while (!signal?.aborted) {
-    assertEventRead();
-    const page = await execute(budget, "events", { after, limit: p.limit });
+    const page = await execute(budget, "events", {
+      after,
+      limit: p.limit,
+      _purpose: "Seguir cambios del presupuesto",
+    });
+    if (page?.status === "pending")
+      throw Object.assign(
+        new Error(
+          "La lectura requiere revisión. Para seguimiento continuo, permití Leer historial de eventos.",
+        ),
+        { code: "APPROVAL_REQUIRED", proposal_id: page.proposal_id },
+      );
     for (const entry of page.events) {
       if (signal?.aborted) return;
       await write(

@@ -1,8 +1,15 @@
 {
   "mcpServers": {
     "nemein": {
-      "command": "node",
-      "args": ["RUTA_ABSOLUTA_AL_PROYECTO/src/mcp.js"]
+      "command": "C:\\RUTA_DE_INSTALACION\\Nemein\\runtime\\node.exe",
+      "args": [
+        "C:\\RUTA_DE_INSTALACION\\Nemein\\runtime\\src\\mcp.js"
+      ],
+      "env": {
+        "BUDGET_DATA_DIR": "C:\\RUTA_PRIVADA\\PresupuestoCero",
+        "BUDGET_AGENT_TOKEN": "TOKEN_DE_TU_CONEXION",
+        "BUDGET_AGENT_VERSION": "1"
+      }
     }
   }
 }

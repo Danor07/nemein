@@ -46,15 +46,59 @@ export function createApp(budget, { installationRoots } = {}) {
     next();
   });
   app.use("/static", express.static(path.join(root, "public")));
-  const agentConfig = () => installedAgentConfig(budget.dir, {runtimeRoot:root,installDirs:installationRoots});
-  app.locals.agentConfig = agentConfig;
-  app.get('/agent-config', (_req,res) => {
-    const config=agentConfig();
-    if(!config)return res.status(503).json({code:"NEMEIN_NOT_INSTALLED",error:"Instalá Nemein con su instalador para generar una configuración MCP estable."});
-    res.attachment('nemein-mcp.json').json(config);
+  const connectionExports = new Map();
+  function showConnection(req, res, connection) {
+    const connectionConfig = installedAgentConfig(budget.dir, {
+      runtimeRoot: root,
+      installDirs: installationRoots,
+      agentToken: connection.token,
+      connectionVersion: connection.version,
+    });
+    for (const [id, entry] of connectionExports)
+      if (Date.now() - entry.at > 600000) connectionExports.delete(id);
+    const exportId = randomBytes(24).toString("hex");
+    if (connectionConfig)
+      connectionExports.set(exportId, {
+        at: Date.now(),
+        config: connectionConfig,
+        token: connection.token,
+        version: connection.version,
+      });
+    return render(req, res, {
+      view: "access",
+      newConnection: connection,
+      connectionConfig,
+      exportId,
+    });
+  }
+  app.get("/agent-config", (_req, res) =>
+    res
+      .status(400)
+      .json({
+        code: "CONNECTION_REQUIRED",
+        error:
+          "Creá o renová una conexión desde Permisos y propuestas para descargar su configuración.",
+      }),
+  );
+  app.post("/agent-config", (req, res, next) => {
+    try {
+      const entry = connectionExports.get(String(req.body.export_id || ""));
+      if (!entry || Date.now() - entry.at > 600000)
+        return res
+          .status(410)
+          .send(
+            "La descarga venció. Renová el token desde Permisos y propuestas.",
+          );
+      budget.forAgent(entry.token, entry.version);
+      res.attachment("nemein-mcp.json").json(entry.config);
+    } catch (e) {
+      next(e);
+    }
   });
   app.get("/static/chart.js", (_req, res) =>
-    res.sendFile('chart.umd.js', {root:path.join(root, 'node_modules/chart.js/dist')}),
+    res.sendFile("chart.umd.js", {
+      root: path.join(root, "node_modules/chart.js/dist"),
+    }),
   );
   app.locals.gs = (n) =>
     "Gs. " +
@@ -63,6 +107,7 @@ export function createApp(budget, { installationRoots } = {}) {
   app.locals.today = today;
   app.locals.csrf = csrf;
   const render = (req, res, extra = {}) => {
+    const activeView = extra.view || req.query.view || "home";
     const m = extra.error
         ? today().slice(0, 7)
         : req.query.month || today().slice(0, 7),
@@ -73,8 +118,24 @@ export function createApp(budget, { installationRoots } = {}) {
       overview: budget.overview(m),
       goals: budget.listGoals(m),
       recurring: budget.listRecurring(),
-      transactions: budget.searchTransactions({month:m,query:req.query.q,account_id:req.query.filter_account}),
-      filters: {q:req.query.q||"",account:req.query.filter_account||""},
+      transactions: budget.searchTransactions({
+        month: m,
+        query: req.query.q,
+        account_id: req.query.filter_account,
+      }),
+      filters: {
+        q: req.query.q || "",
+        account: req.query.filter_account || "",
+      },
+      access:
+        activeView === "access"
+          ? budget.accessState({
+              offset: Number(req.query.proposalOffset || 0),
+            })
+          : null,
+      newConnection: null,
+      connectionConfig: null,
+      exportId: "",
       demo: process.env.BUDGET_DEMO === "1",
       notice: req.query.notice || "",
       error: "",
@@ -83,7 +144,13 @@ export function createApp(budget, { installationRoots } = {}) {
       accountTx: [],
       selectedAccount: Number(req.query.account || s.accounts[0]?.id || 0),
       report: budget.reports(m),
-      cube: budget.cube({from:m+'-01',to:new Date(Date.UTC(Number(m.slice(0,4)),Number(m.slice(5,7)),0)).toISOString().slice(0,10),dimensions:['account','category']}),
+      cube: budget.cube({
+        from: m + "-01",
+        to: new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0))
+          .toISOString()
+          .slice(0, 10),
+        dimensions: ["account", "category"],
+      }),
       mapping: s.accounts.length
         ? budget.mapping(req.query.account || s.accounts[0].id)
         : {},
@@ -112,11 +179,50 @@ export function createApp(budget, { installationRoots } = {}) {
     try {
       const p = req.body;
       switch (req.params.action) {
-        case "goal": budget.setGoal(p); break;
-        case "goal-remove": budget.removeGoal(p); break;
-        case "recurring-create": budget.createRecurring(p); break;
-        case "recurring-post": budget.postRecurring(p); break;
-        case "recurring-toggle": budget.toggleRecurring({...p,active:p.active === "true"}); break;
+        case "connection-create":
+          return showConnection(req, res, budget.createConnection(p));
+        case "connection-rotate":
+          return showConnection(req, res, budget.rotateConnection(p.id));
+        case "connection-revoke":
+          budget.revokeConnection(p.id);
+          break;
+        case "connection-version":
+          budget.changeConnectionVersion(p);
+          break;
+        case "permission-set": {
+          const conditions = {};
+          for (const field of ["max_amount", "account_id"])
+            if (p[field] !== undefined && p[field] !== "") {
+              if (!/^\d+$/.test(String(p[field])))
+                throw Error("El límite y la cuenta deben ser enteros.");
+              conditions[field] = Number(p[field]);
+            }
+          if (Object.keys(conditions).length)
+            conditions.otherwise = p.otherwise || "deny";
+          budget.setRule({ ...p, conditions });
+          break;
+        }
+        case "proposal-resolve":
+          budget.resolveProposal({
+            ...p,
+            args: p.decision === "modify" ? JSON.parse(p.args) : undefined,
+          });
+          break;
+        case "goal":
+          budget.setGoal(p);
+          break;
+        case "goal-remove":
+          budget.removeGoal(p);
+          break;
+        case "recurring-create":
+          budget.createRecurring(p);
+          break;
+        case "recurring-post":
+          budget.postRecurring(p);
+          break;
+        case "recurring-toggle":
+          budget.toggleRecurring({ ...p, active: p.active === "true" });
+          break;
         case "account":
           budget.createAccount(p);
           break;

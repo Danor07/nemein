@@ -10,21 +10,28 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { openBudget } from "../src/core.js";
 import { watchEvents, parseWatchFlags } from "../src/watch.js";
 
+const tokens = new Map();
 function fixture(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-watch-"));
   const b = openBudget(dir);
+  const connection = b.createConnection({ label: "Event fixture" });
+  tokens.set(dir, connection.token);
+  for (const action of ["event-snapshot", "events"])
+    b.setRule({ connection_id: connection.id, action, decision: "allow" });
+  const agent = b.forAgent(connection.token);
   t.after(() => {
     if (b.db.open) b.close();
     rmSync(dir, { recursive: true, force: true });
   });
-  return { dir, b };
+  return { dir, b, agent, connection };
 }
 const run = (dir, args, grant = "1", input) =>
   spawnSync(process.execPath, ["src/cli.js", ...args], {
     env: {
       ...process.env,
       BUDGET_DATA_DIR: dir,
-      BUDGET_EVENTS_READ: grant,
+      BUDGET_AGENT_TOKEN: grant === "1" ? tokens.get(dir) || "" : "",
+      BUDGET_AGENT_VERSION: "1",
       BUDGET_MCP_WRITE: "1",
     },
     encoding: "utf8",
@@ -37,7 +44,7 @@ test("CLI: events denied before opening data; explicit read grant and stable err
   const missing = path.join(dir, "denied");
   const denied = run(missing, ["event-snapshot"], "0");
   assert.equal(denied.status, 1);
-  assert.equal(JSON.parse(denied.stderr).code, "EVENT_READ_DENIED");
+  assert.equal(JSON.parse(denied.stderr).code, "AUTH_REQUIRED");
   assert.equal(existsSync(missing), false);
   const snapshot = run(dir, ["event-snapshot", '{"month":"2026-01"}']);
   assert.equal(snapshot.status, 0, snapshot.stderr);
@@ -103,7 +110,12 @@ test(
       process.execPath,
       ["src/cli.js", "watch", "--after", after, "--poll-ms", "100"],
       {
-        env: { ...process.env, BUDGET_DATA_DIR: dir, BUDGET_EVENTS_READ: "1" },
+        env: {
+          ...process.env,
+          BUDGET_DATA_DIR: dir,
+          BUDGET_AGENT_TOKEN: tokens.get(dir),
+          BUDGET_AGENT_VERSION: "1",
+        },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
@@ -144,29 +156,21 @@ test(
   },
 );
 
-test("watch: waits for slow output, supports cancellation and checks grant every page", async (t) => {
-  const { b } = fixture(t),
+test("watch: slow output, cancellation and policy checked every page", async (t) => {
+  const { b, agent, connection } = fixture(t),
     after = b.eventSnapshot().cursor;
   for (let i = 0; i < 3; i++) b.createGroup({ name: "Slow " + i });
-  const previous = process.env.BUDGET_EVENTS_READ;
-  process.env.BUDGET_EVENTS_READ = "1";
-  t.after(() => {
-    if (previous === undefined) delete process.env.BUDGET_EVENTS_READ;
-    else process.env.BUDGET_EVENTS_READ = previous;
-  });
   const controller = new AbortController();
   let release,
     calls = 0;
   const watching = watchEvents(
-    b,
+    agent,
     { after, limit: 1, poll_ms: 100 },
     {
       signal: controller.signal,
       write: () => {
         calls++;
-        return new Promise((resolve) => {
-          release = resolve;
-        });
+        return new Promise((resolve) => (release = resolve));
       },
     },
   );
@@ -177,18 +181,20 @@ test("watch: waits for slow output, supports cancellation and checks grant every
   await watching;
   await assert.rejects(
     watchEvents(
-      b,
+      agent,
       { after, limit: 1 },
       {
-        write: async () => {
-          process.env.BUDGET_EVENTS_READ = "0";
-        },
+        write: async () =>
+          b.setRule({
+            connection_id: connection.id,
+            action: "events",
+            decision: "deny",
+          }),
       },
     ),
-    (e) => e.code === "EVENT_READ_DENIED",
+    (e) => e.code === "PERMISSION_DENIED",
   );
 });
-
 test("MCP: event tools require a separate read grant and do not enable mutations", async (t) => {
   const { b, dir } = fixture(t);
   const client = new Client({ name: "event-test", version: "1" });
@@ -198,7 +204,8 @@ test("MCP: event tools require a separate read grant and do not enable mutations
     env: {
       ...process.env,
       BUDGET_DATA_DIR: dir,
-      BUDGET_EVENTS_READ: "1",
+      BUDGET_AGENT_TOKEN: tokens.get(dir),
+      BUDGET_AGENT_VERSION: "1",
       BUDGET_MCP_WRITE: "0",
     },
   });
@@ -207,7 +214,16 @@ test("MCP: event tools require a separate read grant and do not enable mutations
     const { tools } = await client.listTools();
     assert.ok(tools.some((x) => x.name === "snapshot_eventos"));
     assert.ok(tools.some((x) => x.name === "eventos"));
-    assert.ok(!tools.some((x) => x.name === "registrar_movimiento"));
+    const denied = await client.callTool({
+      name: "registrar_movimiento",
+      arguments: {
+        account_id: 1,
+        date: "2026-01-01",
+        payee: "Denied",
+        amount: 1,
+      },
+    });
+    assert.equal(denied.isError, true);
     const snap = await client.callTool({
       name: "snapshot_eventos",
       arguments: { month: "2026-01" },
@@ -240,7 +256,12 @@ test(
       process.execPath,
       ["src/cli.js", "watch", "--after", after, "--poll-ms", "100"],
       {
-        env: { ...process.env, BUDGET_DATA_DIR: dir, BUDGET_EVENTS_READ: "1" },
+        env: {
+          ...process.env,
+          BUDGET_DATA_DIR: dir,
+          BUDGET_AGENT_TOKEN: tokens.get(dir),
+          BUDGET_AGENT_VERSION: "1",
+        },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );

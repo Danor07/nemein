@@ -97,46 +97,34 @@ Los positivos del CSV se clasifican inicialmente como ingresos; los reintegros s
 
 La deduplicación compara cuenta + fecha + beneficiario + importe + número de ocurrencia dentro del archivo. Reimportar el mismo extracto no duplica registros y dos filas idénticas en el mismo extracto se conservan. Si dos extractos parciales contienen distintas operaciones idénticas del mismo día, sin identificador bancario no se pueden distinguir: revisá esos casos antes de confirmar. No cambies los textos ni importes de un archivo ya importado esperando que actualice operaciones.
 
-## CLI para agentes
 
-Los comandos usan el mismo motor y validaciones que la interfaz. El resultado es JSON; los errores van a stderr con código de salida no cero.
+## Agentes: permisos y propuestas — versión 0.2.0
 
-```powershell
-npm run cli -- help
-node src/cli.js snapshot '{"month":"2026-10"}'
-node src/cli.js account '{"name":"Efectivo","type":"efectivo","balance":100000,"date":"2026-10-01"}'
-node src/cli.js transaction '{"account_id":1,"date":"2026-10-16","payee":"Mercado","amount":-25000,"category_id":1}'
-node src/cli.js allocate '{"month":"2026-10","category_id":1,"amount":300000}'
-node src/cli.js reports '{"month":"2026-10"}'
-```
+Las conexiones de agentes ahora comienzan **sin permisos de lectura ni escritura**. BUDGET_MCP_WRITE y BUDGET_EVENTS_READ dejan de habilitar acciones. Las configuraciones anteriores deben volver a enlazarse desde la aplicación.
 
-Otros comandos: `transfer`, `import`, `reconcile`, `backup`. El importador recibe `{account_id,content,config}`; config contiene `date,payee,amount,delimiter,dateFormat,thousands,category_id`. La conciliación recibe `{account_id,date,balance,ids,commit}`; `commit:false` solo calcula y `commit:true` confirma cuando la diferencia es cero.
+1. Abrí **Permisos y propuestas**.
+2. Creá una conexión para tu cliente y guardá la configuración con su token.
+3. Elegí permitir, preguntar o negar por acción. Podés limitar importe absoluto y cuenta.
+4. Importá la configuración en tu cliente MCP. Para CLI, usá BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION.
+5. Los pedidos en preguntar aparecen en la bandeja. Podés aceptar, modificar con motivo o rechazar con motivo.
 
-## MCP local propio
+El token se muestra una sola vez; renovar lo invalida para el cliente anterior. Podés revocar permisos en caliente. Las reglas nuevas o incompatibles quedan negadas hasta revisarlas.
 
-`src/mcp.js` ofrece MCP por stdio, sin puerto externo. Consulta presupuesto y reportes por defecto. Para habilitar registro de movimientos y asignaciones, configurá explícitamente `BUDGET_MCP_WRITE=1`.
+Para consultar con CLI:
 
-Ejemplo de configuración para un cliente MCP que use command/args/env:
+    nemein.cmd permissions
+    nemein.cmd event-snapshot --file examples/consulta.json
 
-```json
-{
-  "mcpServers": {
-    "nemein": {
-      "command": "node",
-      "args": [
-        "RUTA_ABSOLUTA_AL_PROYECTO/src/mcp.js"
-      ],
-      "env": {
-        "BUDGET_DATA_DIR": "RUTA_A_TU_CARPETA_DE_DATOS"
-      }
-    }
-  }
-}
-```
+Para pedir una acción revisable, el JSON incluye _base (cursor del snapshot), _purpose y un _request_id único. El resultado pending contiene proposal_id. Consultá:
 
-Usá la ruta real de Node o la copia que genera `desktop:prepare` en `desktop-resources/runtime/node.exe`. No se configura automáticamente ningún cliente.
+    nemein.cmd proposal-status --file estado-propuesta.json
 
-Los datos quedan locales; si conectás un agente que usa un modelo en la nube, lo que ese agente consulte puede enviarse a su proveedor.
+Para trabajar sin el equipo principal, proposal-create recibe {action,args,base,purpose,request_id} y genera un sobre sin abrir la base. Guardá .result como archivo JSON. Más tarde, proposal-submit --file propuesta.json lo entrega con el token del cliente, sin ejecutarlo. Estados de entrega: undelivered, delivered, responded. No hay transporte HTTP ni sincronización de red automática.
+
+MCP incluye permisos_conexion, ejecutar_accion, estado_propuesta y entregar_propuesta. Los nombres anteriores siguen disponibles bajo sus permisos; las escrituras no devuelven implícitamente un snapshot que no haya sido autorizado.
+
+El detalle de contratos, conflictos, reintentos, límites y recuperación está en [Permisos y propuestas](wiki/Modulos/Permisos-y-propuestas.md). Los tokens y los archivos de propuestas son privados. Estas reglas no aíslan programas que ya tienen acceso a los archivos del mismo usuario de Windows.
+
 
 ## Validación
 
@@ -169,7 +157,7 @@ Después de compilar con `npm run desktop:build`, podés abrir `Abrir Nemein.cmd
 - **Metas y pagos**: objetivos por categoría y fecha. El progreso usa fondos disponibles; no crea ahorro ficticio. Recurrentes semanales, mensuales o anuales, con pausa/reactivación y registro explícito de cada vencimiento. Los días 29–31 se ajustan al último día de meses cortos y recuperan su día original en el mes siguiente.
 - **Movimientos**: búsqueda por beneficiario/categoría y filtro por cuenta, dentro del mes seleccionado.
 - **Reportes**: cruce cuenta × categoría y totales conservados. El motor `cube` permite hasta tres dimensiones (month/day/account/category/payee), con fechas inicial y final. Consulta directamente SQLite con dimensiones permitidas y conserva los totales entre agrupamientos.
-- **Agentes y terminal**: configuración MCP descargable y CLI con `nemein.cmd`. Copiá `nemein-mcp.example.json` como `nemein-mcp.json`, reemplazá la ruta genérica por la ruta absoluta del proyecto e importalo en tu cliente. El archivo local queda excluido de Git.
+- **Agentes y terminal**: configuración MCP descargable y CLI con `nemein.cmd`. Creá una conexión en Permisos y propuestas y descargá su configuración desde la versión instalada. El archivo local queda excluido de Git.
 
 Comandos nuevos: overview, search, goals, goal-set, goal-remove, recurring, recurring-create, recurring-post, recurring-toggle, cube, category y group. Consultá AGENTS.md para parámetros.
 
@@ -183,40 +171,17 @@ Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero
 
 ## Eventos locales para workflows
 
-Esta versión del código agrega snapshot consistente, lectura paginada y seguimiento por terminal. El instalador v0.1.0 publicado todavía no contiene estos cambios.
+La versión 0.2.0 del código incluye snapshot consistente, lectura paginada y seguimiento por terminal. La release pública v0.1.0 todavía no incluye estos cambios.
 
-Habilitá la lectura para el proceso que conectás al presupuesto:
+Concedé event-snapshot y events a tu conexión y configurá su token antes de ejecutar:
 
-```powershell
-$env:BUDGET_EVENTS_READ = '1'
-$cut = (.\nemein.cmd event-snapshot --file examples/consulta.json | ConvertFrom-Json).result
-.\nemein.cmd watch --after $cut.cursor
-```
+    nemein.cmd event-snapshot --file examples/consulta.json
+    nemein.cmd watch --after CURSOR --format ndjson
 
-Conservá la proyección de $cut junto con su cursor. El snapshot reúne el presupuesto mensual, metas y recurrentes en un mismo corte. Cada cambio posterior aparece en el flujo aunque se haya registrado mientras se armaba ese snapshot.
+Guardá el snapshot junto con su cursor. Persistí el cursor después de procesar cada evento y deduplicá por source + id. watch vuelve a comprobar permisos en cada página. Para seguimiento continuo se requiere permitir; una consulta en preguntar se revisa desde la bandeja. Se admiten NDJSON y JSON-seq; no se agregan transportes HTTP.
 
-- event-snapshot recibe {month}; devuelve {version,cursor,snapshot,goals,recurring}.
-- events recibe {after,limit}; devuelve {version,events:[{cursor,event}],cursor,hasMore}. Límite predeterminado 100, máximo 1000.
-- watch acepta JSON, --file, --stdin o flags: --after CURSOR, --limit 100, --poll-ms 1000, --format ndjson|json-seq, --once.
-- --once entrega como máximo una página y termina; puede haber más eventos. Reanudar con el cursor del último registro entregado.
-- El modo continuo consulta cada segundo cuando está al día (intervalo entre 100 y 60000 ms); procesa páginas pendientes sin esa espera. Sólo se ejecuta mientras el usuario o su herramienta lo mantiene abierto.
-- Cada registro es {version:1,cursor,event}. JSON-seq usa RS + JSON + LF según RFC 7464; el sobre event es CloudEvents 1.0, y la envoltura con cursor es el contrato propio de Nemein.
-- stdout contiene sólo registros; errores JSON con code en stderr y salida no cero. Ctrl+C detiene el seguimiento. Un pipe cerrado (EPIPE) termina normalmente.
-- El consumidor guarda su cursor después de persistir lo procesado y deduplica por source + id. Los eventos indican qué operación ocurrió; para consultar saldos o detalles se usa otro snapshot.
-- Un cursor no es una credencial. Cursores incompatibles o historia incompleta producen errores explícitos; ver [el contrato](wiki/Modulos/Eventos.md).
-
-BUDGET_EVENTS_READ=1 es una concesión específica para leer el historial y snapshots de ese presupuesto en ese proceso. No habilita escritura. Quitar la variable de la configuración del cliente y reiniciar sus procesos revoca la concesión; la política granular P1 sigue pendiente.
-
-En MCP, esa misma variable agrega las herramientas snapshot_eventos y eventos. El seguimiento continuo es un comando de terminal; no imprime registros sueltos dentro del protocolo MCP. BUDGET_MCP_WRITE sigue controlando escritura por separado.
-
-Los contratos JSON están en src/contracts/. No se agregan endpoints HTTP ni servicios de nube.
+Contratos y límites: [Eventos](wiki/Modulos/Eventos.md).
 
 ## Rutas estables para MCP
 
-Para uso diario, descargá la configuración desde Nemein instalado. El ejemplo manual anterior basado en el proyecto y desktop-resources sirve sólo para desarrollo.
-
-La descarga ahora requiere una instalación completa: nemein.exe, uninstall.exe y runtime con node.exe, package.json y src/mcp.js. Busca la instalación actual, el registro NSIS y ubicaciones habituales; NEMEIN_INSTALL_DIR permite indicar una ubicación personalizada.
-
-Rechaza src-tauri/target, desktop-resources, árboles Git e instalaciones incompletas. Sin instalación válida, muestra que hace falta instalar Nemein y devuelve NEMEIN_NOT_INSTALLED en vez de exportar rutas de compilación.
-
-Esta corrección está en el código y runtimes del checkout; no se publicó un instalador nuevo. Las pruebas usaron instalaciones sintéticas, no una instalación NSIS real.
+Descargá la configuración desde una conexión de Nemein instalado, versión 0.2.0 o posterior. El generador verifica una instalación NSIS completa y rechaza target, desktop-resources y árboles Git. Sin instalación compatible muestra cómo actualizarla; no exporta rutas de compilación. NEMEIN_INSTALL_DIR permite indicar una instalación personalizada.

@@ -1,36 +1,50 @@
 import { readFileSync } from "node:fs";
 import { openBudget } from "./core.js";
-import { commands, execute, assertEventRead } from "./commands.js";
+import { commands, execute, proposalFile } from "./commands.js";
 import { parseWatchFlags, watchOptions, watchEvents } from "./watch.js";
-const args = process.argv.slice(2);
-const [command = "help", raw = "{}", file] = args;
-
-if (command === "help") {
+const args = process.argv.slice(2),
+  [command = "help", raw = "{}", file] = args;
+if (command === "help")
   console.log(
     JSON.stringify(
       {
         usage:
-          "node src/cli.js <comando> <JSON> | <comando> --file solicitud.json | <comando> --stdin",
-        commands: [...Object.keys(commands), "watch"],
+          "nemein.cmd <comando> <JSON> | <comando> --file solicitud.json | <comando> --stdin",
+        commands: [
+          ...Object.keys(commands),
+          "watch",
+          "proposal-create",
+          "proposal-submit",
+          "proposal-status",
+          "permissions",
+        ],
+        authentication:
+          "BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION (1 por defecto), creados en Permisos y propuestas. Sin permisos por defecto.",
         watch:
           "watch --after CURSOR [--limit 100] [--poll-ms 1000] [--format ndjson|json-seq] [--once]",
-        eventRead:
-          "event-snapshot, events y watch requieren BUDGET_EVENTS_READ=1. watch también acepta JSON, --file y --stdin.",
-        note: "Todos los importes son guaraníes enteros. reconcile confirma solo con commit:true.",
+        proposals:
+          "proposal-create no requiere base abierta: genera un archivo entregable después. Guardá .result del JSON. proposal-submit lo entrega y proposal-status consulta la respuesta.",
       },
       null,
       2,
     ),
   );
-} else {
-  let b;
-  const controller = new AbortController();
-  const stop = () => controller.abort();
-  const stdoutError = (e) => controller.abort(e);
+else {
+  let owner;
+  const controller = new AbortController(),
+    stop = () => controller.abort(),
+    stdoutError = (e) => controller.abort(e);
   try {
-    if (["event-snapshot", "events", "watch"].includes(command))
-      assertEventRead();
-    if (command !== "watch" && !Object.hasOwn(commands, command))
+    if (
+      command !== "watch" &&
+      ![
+        "proposal-create",
+        "proposal-submit",
+        "proposal-status",
+        "permissions",
+      ].includes(command) &&
+      !Object.hasOwn(commands, command)
+    )
       throw Error("Comando desconocido.");
     const input =
       command === "watch" &&
@@ -48,22 +62,39 @@ if (command === "help") {
     if (!input || typeof input !== "object" || Array.isArray(input))
       throw Error("La solicitud debe ser un objeto JSON.");
     const p = command === "watch" ? watchOptions(input) : input;
-    b = openBudget();
-    await b.backup();
-    if (command === "watch") {
-      process.on("SIGINT", stop);
-      process.on("SIGTERM", stop);
-      process.stdout.on("error", stdoutError);
-      await watchEvents(b, p, {
-        signal: controller.signal,
-        write: (chunk) =>
-          new Promise((resolve, reject) =>
-            process.stdout.write(chunk, (e) => (e ? reject(e) : resolve())),
+    if (command === "proposal-create")
+      console.log(JSON.stringify({ ok: true, result: proposalFile(p) }));
+    else {
+      if (!process.env.BUDGET_AGENT_TOKEN)
+        throw Object.assign(
+          new Error(
+            "Configurá BUDGET_AGENT_TOKEN desde Permisos y propuestas.",
           ),
-      });
-    } else {
-      const result = await execute(b, command, p);
-      console.log(JSON.stringify({ ok: true, result: result ?? null }));
+          { code: "AUTH_REQUIRED" },
+        );
+      owner = openBudget();
+      const b = owner.forAgent(
+        process.env.BUDGET_AGENT_TOKEN,
+        process.env.BUDGET_AGENT_VERSION || "1",
+      );
+      if (command === "watch") {
+        process.on("SIGINT", stop);
+        process.on("SIGTERM", stop);
+        process.stdout.on("error", stdoutError);
+        await watchEvents(b, p, {
+          signal: controller.signal,
+          write: (chunk) =>
+            new Promise((resolve, reject) =>
+              process.stdout.write(chunk, (e) => (e ? reject(e) : resolve())),
+            ),
+        });
+      } else
+        console.log(
+          JSON.stringify({
+            ok: true,
+            result: (await execute(b, command, p)) ?? null,
+          }),
+        );
     }
   } catch (e) {
     if (e.code !== "EPIPE") {
@@ -71,7 +102,8 @@ if (command === "help") {
         JSON.stringify({
           ok: false,
           error: e.message,
-          ...(e.code ? { code: e.code } : {}),
+          code: e.code || "INVALID_REQUEST",
+          ...(e.proposal_id ? { proposal_id: e.proposal_id } : {}),
         }),
       );
       process.exitCode = 1;
@@ -79,7 +111,6 @@ if (command === "help") {
   } finally {
     process.off("SIGINT", stop);
     process.off("SIGTERM", stop);
-    // Keep the stdout error listener until queued writes have finished closing.
-    b?.close();
+    owner?.close();
   }
 }

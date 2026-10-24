@@ -1,31 +1,37 @@
 # Privacidad y datos locales
 
-Nemein guarda el presupuesto en una base SQLite en el equipo. No incluye cuentas de usuario, telemetría, sincronización bancaria ni servicios de nube propios. El servidor HTTP escucha únicamente en 127.0.0.1.
+Nemein guarda el presupuesto en SQLite en el equipo. No incluye telemetría, cuentas de nube, sincronización bancaria ni servicios propios remotos. La interfaz HTTP escucha sólo en 127.0.0.1; no se agregó una API HTTP para integraciones.
 
 ## Archivos personales
 
-En Windows, la ubicación predeterminada es `%LOCALAPPDATA%\PresupuestoCero`. `BUDGET_DATA_DIR` permite elegir otra carpeta. La base y los respaldos diarios contienen los datos financieros completos y no están cifrados por la aplicación. Las copias en el mismo disco no protegen frente a la pérdida del equipo.
+La ubicación predeterminada es %LOCALAPPDATA%\PresupuestoCero. BUDGET_DATA_DIR permite elegir otra carpeta. Base y respaldos contienen información financiera completa y no están cifrados por la aplicación. Las copias en el mismo disco no protegen contra pérdida del equipo.
 
-No adjuntes bases, extractos, CSV reales ni respaldos al abrir un issue. Para reproducir problemas, usá datos ficticios. `examples/` y la vista previa contienen únicamente ejemplos sintéticos.
+No adjuntes bases, extractos, propuestas, configuraciones de cliente ni CSV reales a un issue. Los ejemplos y pruebas usan datos ficticios. Git excluye bases, WAL/SHM, respaldos, datos locales y configuración MCP personal.
 
-El repositorio excluye bases SQLite y archivos WAL/SHM, carpetas de datos, importaciones y exportaciones, respaldos, logs, archivos de entorno y configuración MCP local. Solo se publica el ejemplo MCP con una ruta genérica.
+## Conexiones y permisos desde 0.2.0
 
-## Agentes
+CLI y MCP requieren una conexión creada en la aplicación, mediante BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION. Cada acción empieza negada. El propietario elige permitir, preguntar o negar, con límites opcionales por importe y cuenta.
 
-El MCP usa stdio y comparte el presupuesto con la interfaz y la CLI. Permite consultas por defecto; `BUDGET_MCP_WRITE=1` habilita las herramientas de escritura. Activarlo concede al cliente acceso para modificar datos locales.
+BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no conceden permisos. Las configuraciones anteriores deben volver a enlazarse. Los agentes no administran sus propias reglas.
 
-Si un agente consulta el presupuesto y utiliza un modelo en la nube, puede enviar esa información al proveedor del modelo. Esto depende del agente y su configuración. Revisá los permisos del cliente antes de conectarlo.
+Los tokens originales sólo se muestran al crear o renovar una conexión. La base almacena su SHA-256; el cliente guarda el token en su configuración privada. La descarga con token requiere CSRF y queda disponible diez minutos en memoria de esa sesión. Revocar una conexión o cambiar permisos se comprueba en pedidos nuevos; una consulta ya iniciada puede terminar.
 
-## Uso local
+La configuración apunta a la instalación estable compatible de Nemein, conservando la carpeta de presupuesto seleccionada. No se exportan rutas de compilación.
 
-La aplicación está pensada para una persona en un equipo de confianza. No ofrece autenticación multiusuario y no debe exponerse mediante un proxy, túnel o servidor público. Otros programas que se ejecutan con tu usuario pueden acceder a los archivos del presupuesto.
+## Auditoría, eventos y propuestas
 
-Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
+Los eventos P4 conservan identificadores, hora y tipo de operación, sin copiar argumentos, montos ni comercios. El snapshot sí contiene información financiera.
 
-## Registro de eventos y seguimiento
+La auditoría P1 registra actor, acción, argumentos y regla aplicada. Las propuestas P2 conservan argumentos originales/finales, propósito, decisiones y respuestas. Estos registros pueden contener datos financieros y forman parte de los respaldos. No hay purga automática por ahora.
 
-La base incluye un registro local de operaciones con identificadores, hora y tipo de operación. El evento no copia montos, comercios o argumentos originales; el snapshot consistente sí contiene información financiera. El registro se conserva sin purga automática por ahora y forma parte de los respaldos.
+Los archivos de propuestas preparados sin conexión no contienen token, pero pueden incluir información financiera. Su entrega es manual mediante CLI/MCP; no se sincronizan ni envían a servicios externos automáticamente.
 
-BUDGET_EVENTS_READ=1 habilita lectura de eventos y snapshots para ese proceso de CLI/MCP; no concede escritura. El seguimiento sólo corre mientras la herramienta que lo inició está abierta. Para revocar esta concesión desde la configuración del cliente, detener y reiniciar el proceso sin la variable. Todavía no existe una pantalla de permisos granulares.
+Restaurar un respaldo recupera también las reglas y revocaciones que existían en ese momento. Antes de reconectar clientes a una base restaurada, revisar o revocar esas conexiones.
 
-La salida de la terminal y las respuestas MCP pueden ser guardadas o reenviadas por el consumidor. El cursor no es una contraseña ni un mecanismo de cifrado; el control de acceso local sigue dependiendo también de los permisos del sistema sobre el presupuesto.
+## Uso local y agentes en la nube
+
+La aplicación está pensada para una persona en un equipo de confianza. La interfaz es del propietario local; no es un portal multiusuario y no debe exponerse por un túnel, proxy o servidor público. Otros programas con acceso a los archivos de ese usuario pueden eludir la política; los permisos de Nemein no son un sandbox del sistema operativo.
+
+Un cliente MCP o una terminal pueden guardar o reenviar lo consultado. Si el agente usa un modelo en la nube, sus consultas pueden llegar al proveedor elegido por el usuario. El cursor es una posición de lectura, no una contraseña.
+
+Compatibilidad: carpeta de datos e identificador de instalación anteriores se conservan para no perder presupuestos.

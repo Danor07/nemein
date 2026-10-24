@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+export const reviewedReadContext = new AsyncLocalStorage();
 import { Buffer } from "node:buffer";
 
 function failure(code, message) {
@@ -6,7 +8,7 @@ function failure(code, message) {
 function encode(position) {
   return Buffer.from(JSON.stringify(position)).toString("base64url");
 }
-function decode(token) {
+export function decodeCursor(token) {
   try {
     if (
       typeof token !== "string" ||
@@ -65,6 +67,8 @@ export function attachEventReads(budget) {
   }
   function readTransaction(fn) {
     // A cursor must never describe uncommitted writes owned by a caller.
+    if (db.inTransaction && reviewedReadContext.getStore() === true)
+      return fn();
     if (db.inTransaction)
       throw failure(
         "EVENT_READ_IN_TRANSACTION",
@@ -87,7 +91,7 @@ export function attachEventReads(budget) {
     });
 
   budget.readEvents = ({ after, limit = 100 } = {}) => {
-    const position = decode(after);
+    const position = decodeCursor(after);
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
       throw failure(
         "INVALID_EVENT_LIMIT",

@@ -1,7 +1,7 @@
 ---
 tipo: plan
 actualizado: 2026-10-24
-verificado-en: 1c4cca5
+verificado-en: c084aa9 + cambios locales 0.2.0
 ---
 
 # Plan de Nemein — qué se hace y en qué orden
@@ -28,17 +28,17 @@ verificado-en: 1c4cca5
 
 ## Propuestas y dependencias
 
-Los números son identificadores, no una secuencia obligatoria. **Siguiente: P1 (permisos granulares) → P2 (bandeja de propuestas).** P4a ya es utilizable con concesión explícita. P4b se implementará cuando exista un destino concreto. P2 cubre las acciones que necesiten aprobación. P0 mantiene sus verificaciones pendientes. P3, P7 y P8 son adaptadores opcionales.
+Los números son identificadores, no una secuencia obligatoria. **P1 y P2 implementados para uso local en 0.2.0.** [Contrato y límites](Modulos/Permisos-y-propuestas.md). P4a usa sus permisos por acción. P4b se implementará cuando exista un destino concreto. P2 cubre las acciones que necesiten aprobación. P0 mantiene sus verificaciones pendientes. P3, P7 y P8 son adaptadores opcionales.
 
 Registrar hechos internamente puede empezar antes de P1; exponerlos a integraciones no concede acceso automáticamente.
 
 | # | Qué | Depende de | Estado |
 |---|---|---|---|
 | P0 | Cerrar lo pendiente de la v0.1.0 | — | pendiente |
-| P1 | Motor de permisos (ADR-0001) | — | decidido, sin empezar |
-| P2 | Bandeja de propuestas (ADR-0002) | P1 | decidido, sin empezar |
+| P1 | Motor de permisos (ADR-0001) | — | implementado localmente en 0.2.0 |
+| P2 | Bandeja de propuestas (ADR-0002) | P1 | implementado localmente en 0.2.0 |
 | P3 | Formatos bancarios como plugins WASM | P1 | propuesta |
-| P4 | Contratos, registro y `nemein watch` | concesión local explícita; P1 para granularidad | P4a utilizable con concesión explícita; P4b pendiente |
+| P4 | Contratos, registro y `nemein watch` | concesión local explícita; P1 para granularidad | P4a integrado con P1; P4b pendiente |
 | P5 | Respaldo con la app cerrada y en otro disco | — | propuesta |
 | P6 | Presupuestos separados por negocio | — | propuesta |
 | P7 | Leer avisos de pago por JMAP | P1; P2 si propuesta remota | propuesta |
@@ -52,7 +52,10 @@ Registrar hechos internamente puede empezar antes de P1; exponerlos a integracio
   - instalar con el asistente NSIS en un equipo limpio (la VM de pruebas sirve), abrir, cargar un movimiento, cerrar y volver a abrir;
   - anotar el resultado en `VALIDACION.md`.
 
-### P1 — Motor de permisos (decidido: ADR-0001)
+### P1 — Motor de permisos (implementado; ADR-0001)
+
+**MEDIDO:** catálogo cerrado, reglas versionadas, límites de importe/cuenta, revocación, auditoría y vectores portables. [Implementación y límites](Modulos/Permisos-y-propuestas.md). La ventana local representa al propietario; no aísla procesos con acceso directo al archivo SQLite.
+
 - **Qué:** reemplazar el interruptor de todo o nada `BUDGET_MCP_WRITE=1` por una política acción por acción.
 - **Cómo, más o menos:**
   1. **El catálogo de acciones:** los comandos de la CLI y las herramientas del MCP, cada uno con nombre y con si lee o escribe.
@@ -64,7 +67,10 @@ Registrar hechos internamente puede empezar antes de P1; exponerlos a integracio
   7. **Cada pedido dice qué y para qué en lenguaje llano.** Todo permiso se puede revocar, y una versión nueva de una extensión que pide algo más vuelve a preguntar.
   8. **Vectores de prueba:** actor, acción, argumentos y política dan una decisión. Es el oráculo para traducirlo a Resto-tech (ADR-0003).
 
-### P2 — Bandeja de propuestas (decidido: ADR-0002)
+### P2 — Bandeja de propuestas (implementada localmente; ADR-0002)
+
+**MEDIDO:** aceptar, modificar con motivo y rechazar, comprobación de base y permisos al resolver, reintentos idempotentes y entrega de archivos offline. Descubrimiento y sincronización entre equipos siguen pendientes. [Contrato](Modulos/Permisos-y-propuestas.md).
+
 - **Qué:** un «pull request contable». Quien no es el que escribe manda una propuesta, y el único que escribe la acepta, la modifica o la rechaza desde una bandeja. Una acción en «preguntar» del motor (P1) es una propuesta.
 - **Cómo, más o menos:**
   1. **Cada propuesta lleva:** un identificador único, la acción con sus argumentos y su **base**, o sea lo que veía quien la hizo.
@@ -89,7 +95,7 @@ Registrar hechos internamente puede empezar antes de P1; exponerlos a integracio
 
 ### P4 — Contratos, registro transaccional y lectura reanudable
 
-**P4a implementado para uso local con concesión explícita:** registro, cursores, snapshot, lectura por CLI/MCP y watch; [contratos, evidencia y límites](Modulos/Eventos.md). Pendientes política granular P1 y entrega por destino P4b. [Fundamento](Entender/Interoperabilidad.md).
+**P4a implementado para uso local con concesión explícita:** registro, cursores, snapshot, lectura por CLI/MCP y watch; [contratos, evidencia y límites](Modulos/Eventos.md). Permisos granulares P1 integrados. Pendiente entrega por destino P4b. [Fundamento](Entender/Interoperabilidad.md).
 
 **P4a — implementado con límites documentados**
 - Empezar por contratos de comportamiento inspirados en [Design by Contract](Entender/Interoperabilidad.md#design-by-contract-como-inspiración): precondiciones, postcondiciones e invariantes por operación, con casos de éxito, rechazo y fallo. JSON Schema complementa esos contratos describiendo los datos.

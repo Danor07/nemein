@@ -1,24 +1,20 @@
 # Nemein: acceso para agentes
 
-Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en `%LOCALAPPDATA%\PresupuestoCero`; no sembrar ejemplos ahí. Usar BUDGET_DATA_DIR con una carpeta temporal para probar.
+Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en %LOCALAPPDATA%\PresupuestoCero; usar BUDGET_DATA_DIR temporal para pruebas, nunca sembrar ejemplos en el presupuesto real.
 
-- Terminal: `nemein.cmd help`. Cada comando acepta JSON, `--file ruta.json` o `--stdin`. Devuelve JSON y sale con código distinto de cero ante un error.
-- MCP: copiar `nemein-mcp.example.json` como `nemein-mcp.json`, completar la ruta absoluta e importarlo en el cliente. Solo lectura por defecto; BUDGET_MCP_WRITE=1 habilita mutaciones cuando el usuario las autoriza.
-- Consultar `overview`, `snapshot`, `search`, `goals`, `recurring`, `reports`, `cube`.
-- `cube` recibe `{from,to,dimensions}`; dimensiones permitidas: month, day, account, category, payee (1 a 3). Los totales excluyen transferencias y saldos iniciales. Reintegros restan gasto.
-- `goal-set` recibe `{category_id,amount,due_date}`; no mueve dinero.
-- `recurring-create` recibe `{account_id,category_id,payee,amount,next_date,frequency}`. frequency es weekly, monthly o yearly. Gastos negativos y categoría obligatoria.
-- `recurring-post` recibe `{id,due_date}` usando exactamente el próximo vencimiento consultado. Un reintento con el mismo vencimiento falla sin duplicar. Nunca adelantar vencimientos en un bucle sin instrucción del usuario.
-- Para cambiar saldos usar el motor, CLI o MCP; no editar SQLite directamente. La interfaz usa las mismas validaciones.
-- Pruebas: `npm test` después de `npm ci`.
-- Si cambia src, views o public, actualizar también ambos runtimes de escritorio antes de entregar: desktop-resources/runtime y src-tauri/target/release/runtime.
+- Crear una conexión en **Permisos y propuestas**, guardar su configuración y asignar acciones a mano. Sin regla vigente, se niega.
+- CLI y MCP requieren BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION (1 por defecto). BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no autorizan nada.
+- CLI: nemein.cmd help. Cada comando acepta JSON, --file o --stdin; stdout JSON, errores en stderr con code y salida no cero.
+- Consultar permisos propios con permissions o permisos_conexion (MCP). El catálogo de herramientas no implica autorización.
+- snapshot, overview, search, goals, recurring, reports y cube mantienen las validaciones del dominio. Importes enteros; cube permite entre una y tres dimensiones month/day/account/category/payee, con fechas from/to.
+- Para solicitudes revisables usar _purpose, _base (cursor del snapshot) y _request_id único; en ejecutar_accion de MCP se llaman purpose, base y request_id.
+- Si el resultado es pending, no repetir la mutación: consultar proposal-status {id} o estado_propuesta. Sólo el propietario resuelve desde la bandeja.
+- proposal-create prepara un sobre sin abrir la base; guardar .result y entregarlo más tarde con proposal-submit --file. Nunca contiene token. Un archivo viejo puede llegar como conflicto y no se fusiona solo.
+- event-snapshot {month} devuelve snapshot, goals, recurring y cursor consistentes. events {after,limit} lee hasta 1000 eventos. watch --after CURSOR admite NDJSON/json-seq y --once (una página). Requieren sus acciones permitidas; persistir cursor después de procesar y deduplicar source + id.
+- recurring-post {id,due_date} registra sólo el próximo vencimiento; un reintento del mismo vencimiento falla sin duplicar. Nunca adelantar fechas en bucle sin instrucción humana.
+- Para escribir usar el motor protegido, CLI o MCP; no SQLite directamente. La fachada del agente no ofrece administración ni la conexión de base.
+- La interfaz local es del propietario de confianza. Estos permisos no aíslan otros programas del mismo usuario del sistema.
+- npm test usa presupuestos temporales. Actualizar los runtimes de escritorio al cambiar src, views o public; distribuir código de uso diario mediante instalador, nunca con rutas target.
 
-Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
-
-## Eventos P4
-
-- Lectura opt-in: BUDGET_EVENTS_READ=1 para event-snapshot, events y watch en CLI, o snapshot_eventos y eventos en MCP. No se habilita con BUDGET_MCP_WRITE.
-- event-snapshot recibe {month} y devuelve proyección consistente con cursor. events recibe {after,limit}; límite máximo 1000.
-- watch --after CURSOR [--format ndjson|json-seq] [--once] sigue cambios por stdout. --once entrega una página. Persistir el cursor sólo después de procesar cada registro; deduplicar por source + id.
-- El cursor es posición, no permiso. Restauración o huecos pueden exigir nuevo snapshot. Ver wiki/Modulos/Eventos.md.
-- Esta concesión es por proceso/presupuesto; detener y reiniciar sin la variable para revocarla desde la configuración del cliente. P1 granular sigue pendiente.
+Fuentes: src/actions.js (catálogo), src/access.js (política y propuestas), wiki/Modulos/Permisos-y-propuestas.md (contratos).
+Compatibilidad: datos en %LOCALAPPDATA%\PresupuestoCero e identificador local.presupuesto.cero conservados.

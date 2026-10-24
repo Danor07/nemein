@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nemein:schema:proposal-file:1",
+  "title": "Nemein offline proposal v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "request_id",
+    "action",
+    "args",
+    "purpose",
+    "delivery"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+    },
+    "action": {
+      "enum": [
+        "snapshot",
+        "overview",
+        "account",
+        "transaction",
+        "allocate",
+        "transfer",
+        "import",
+        "reconcile",
+        "reports",
+        "categorize",
+        "category",
+        "group",
+        "goals",
+        "goal-set",
+        "goal-remove",
+        "recurring",
+        "recurring-create",
+        "recurring-post",
+        "recurring-toggle",
+        "search",
+        "cube",
+        "event-snapshot",
+        "events",
+        "transaction-delete",
+        "import-preview",
+        "import-mapping",
+        "account-transactions"
+      ]
+    },
+    "args": {
+      "type": "object"
+    },
+    "base": {
+      "type": "string",
+      "maxLength": 1024
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "delivery": {
+      "const": "undelivered"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": [
+              "account",
+              "transaction",
+              "allocate",
+              "transfer",
+              "import",
+              "reconcile",
+              "categorize",
+              "category",
+              "group",
+              "goal-set",
+              "goal-remove",
+              "recurring-create",
+              "recurring-post",
+              "recurring-toggle",
+              "transaction-delete"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "base"
+        ]
+      }
+    }
+  ]
+}

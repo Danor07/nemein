@@ -1,185 +1,198 @@
 import { execute } from "./commands.js";
+import { actions } from "./actions.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { openBudget } from "./core.js";
-const b = openBudget();
-await b.backup();
-const server = new McpServer({ name: "nemein", version: "0.1.0" });
+
+const owner = openBudget();
+const b = owner.forAgent(
+  process.env.BUDGET_AGENT_TOKEN,
+  process.env.BUDGET_AGENT_VERSION || "1",
+);
+const server = new McpServer({ name: "nemein", version: "0.2.0" });
 const out = (fn) => async (p) => {
   try {
-    return { content: [{ type: "text", text: JSON.stringify(await fn(p)) }] };
+    return {
+      content: [{ type: "text", text: JSON.stringify((await fn(p)) ?? null) }],
+    };
   } catch (e) {
-    return { isError: true, content: [{ type: "text", text: e.message }] };
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            code: e.code || "INVALID_REQUEST",
+            error: e.message,
+          }),
+        },
+      ],
+    };
   }
 };
-server.tool(
-  "presupuesto",
-  "Consultar presupuesto, cuentas y movimientos",
-  { month: z.string().optional() },
-  out((p) => b.snapshot(p.month)),
-);
-server.tool(
-  "reportes",
-  "Gastos y patrimonio",
-  { month: z.string() },
-  out((p) => b.reports(p.month)),
-);
-server.tool(
-  "resumen",
-  "Ingresos y gastos del mes, categorías sin cubrir, metas y próximos vencimientos",
-  { month: z.string().optional() },
-  out((p) => b.overview(p.month)),
-);
-server.tool(
-  "buscar_movimientos",
-  "Buscar movimientos por mes, texto, cuenta o categoría",
-  {
-    month: z.string().optional(),
-    query: z.string().optional(),
-    account_id: z.number().int().optional(),
-    category_id: z.number().int().optional(),
-  },
-  out((p) => b.searchTransactions(p)),
-);
-server.tool(
-  "metas",
-  "Consultar metas y progreso con el saldo disponible de la categoría",
-  { month: z.string().optional() },
-  out((p) => b.listGoals(p.month)),
-);
-server.tool(
-  "recurrentes",
-  "Consultar recurrentes activos y pausados con su próximo vencimiento",
-  {},
-  out(() => b.listRecurring()),
-);
-server.tool(
-  "analizar_gastos",
-  "Cruzar gastos por mes, día, categoría, cuenta o beneficiario. Excluye transferencias y saldos iniciales; reintegros reducen gastos.",
-  {
-    from: z.string(),
-    to: z.string(),
-    dimensions: z
-      .array(z.enum(["month", "day", "category", "account", "payee"]))
-      .min(1)
-      .max(3)
-      .optional(),
-  },
-  out((p) => b.cube(p)),
-);
-if (process.env.BUDGET_EVENTS_READ === "1") {
-  server.tool(
-    "snapshot_eventos",
-    "Snapshot mensual consistente, metas, recurrentes y cursor para seguir cambios",
-    { month: z.string().optional() },
-    out((p) => execute(b, "event-snapshot", p)),
-  );
-  server.tool(
-    "eventos",
-    "Leer una página de eventos después de un cursor; guardar cursor tras procesar y deduplicar por source e id",
+const month = { month: z.string().optional() };
+const id = z.number().int().positive(),
+  amount = z.number().int();
+const descriptors = [
+  ["presupuesto", "snapshot", month],
+  ["reportes", "reports", month],
+  ["resumen", "overview", month],
+  [
+    "buscar_movimientos",
+    "search",
     {
-      after: z.string().max(1024),
-      limit: z.number().int().min(1).max(1000).optional(),
+      ...month,
+      query: z.string().optional(),
+      account_id: id.optional(),
+      category_id: id.optional(),
     },
-    out((p) => execute(b, "events", p)),
-  );
-}
-if (process.env.BUDGET_MCP_WRITE === "1") {
-  server.tool(
+  ],
+  ["metas", "goals", month],
+  ["recurrentes", "recurring", {}],
+  [
+    "analizar_gastos",
+    "cube",
+    {
+      from: z.string(),
+      to: z.string(),
+      dimensions: z
+        .array(z.enum(["month", "day", "category", "account", "payee"]))
+        .min(1)
+        .max(3)
+        .optional(),
+    },
+  ],
+  ["snapshot_eventos", "event-snapshot", month],
+  [
+    "eventos",
+    "events",
+    { after: z.string().max(1024), limit: id.max(1000).optional() },
+  ],
+  [
     "crear_cuenta",
-    "Crear una cuenta con su saldo inicial",
+    "account",
     {
       name: z.string(),
       type: z.enum(["corriente", "credito", "efectivo"]),
-      balance: z.number().int(),
+      balance: amount,
       date: z.string(),
     },
-    out((p) => ({ id: b.createAccount(p) })),
-  );
-  server.tool(
-    "crear_categoria",
-    "Crear una categoría dentro de un grupo existente",
-    { name: z.string(), group_id: z.number().int() },
-    out((p) => ({ id: b.createCategory(p) })),
-  );
-  server.tool(
+  ],
+  ["crear_categoria", "category", { name: z.string(), group_id: id }],
+  [
     "transferir",
-    "Transferir dinero entre cuentas sin duplicar gastos",
-    {
-      from: z.number().int(),
-      to: z.number().int(),
-      amount: z.number().int().positive(),
-      date: z.string(),
-    },
-    out((p) => {
-      b.transfer(p);
-      return { ok: true };
-    }),
-  );
-  server.tool(
+    "transfer",
+    { from: id, to: id, amount: amount.positive(), date: z.string() },
+  ],
+  [
     "guardar_meta",
-    "Crear o actualizar una meta; no mueve dinero",
-    {
-      category_id: z.number().int(),
-      amount: z.number().int().positive(),
-      due_date: z.string(),
-    },
-    out((p) => b.setGoal(p)),
-  );
-  server.tool(
+    "goal-set",
+    { category_id: id, amount: amount.positive(), due_date: z.string() },
+  ],
+  [
     "crear_recurrente",
-    "Programar un ingreso o gasto; no lo registra todavía",
+    "recurring-create",
     {
-      account_id: z.number().int(),
-      category_id: z.number().int().optional(),
+      account_id: id,
+      category_id: id.optional(),
       payee: z.string(),
-      amount: z.number().int(),
+      amount,
       next_date: z.string(),
       frequency: z.enum(["weekly", "monthly", "yearly"]),
     },
-    out((p) => ({ id: b.createRecurring(p) })),
-  );
-  server.tool(
-    "registrar_vencimiento",
-    "Registrar una sola ocurrencia y avanzar al próximo vencimiento. due_date debe coincidir con el próximo vencimiento consultado.",
-    { id: z.number().int(), due_date: z.string() },
-    out((p) => b.postRecurring(p)),
-  );
-  server.tool(
-    "activar_recurrente",
-    "Pausar o reactivar un movimiento recurrente",
-    { id: z.number().int(), active: z.boolean() },
-    out((p) => b.toggleRecurring(p)),
-  );
-  server.tool(
+  ],
+  ["registrar_vencimiento", "recurring-post", { id, due_date: z.string() }],
+  ["activar_recurrente", "recurring-toggle", { id, active: z.boolean() }],
+  [
     "registrar_movimiento",
-    "Registrar ingreso o gasto en guaraníes enteros",
+    "transaction",
     {
-      account_id: z.number().int(),
+      account_id: id,
       date: z.string(),
       payee: z.string(),
-      amount: z.number().int(),
-      category_id: z.number().int().optional(),
+      amount,
+      category_id: id.optional(),
     },
-    out((p) => ({ id: b.addTransaction(p) })),
-  );
-  server.tool(
+  ],
+  [
     "asignar_presupuesto",
-    "Fijar el importe asignado a una categoría en un mes",
-    {
-      month: z.string(),
-      category_id: z.number().int(),
-      amount: z.number().int(),
-    },
-    out((p) => {
-      b.allocate(p);
-      return b.snapshot(p.month);
+    "allocate",
+    { month: z.string(), category_id: id, amount },
+  ],
+];
+const metadata = {
+  _request_id: z.string().max(100).optional(),
+  _base: z.string().max(1024).optional(),
+  _purpose: z.string().max(500).optional(),
+};
+for (const [name, action, schema] of descriptors)
+  server.tool(
+    name,
+    actions[action].label + "; sujeto a los permisos de esta conexión",
+    { ...schema, ...metadata },
+    out(async (p) => {
+      const value = await execute(b, action, p);
+      if (
+        ["account", "category", "recurring-create"].includes(action) &&
+        typeof value === "number"
+      )
+        return { id: value };
+      return value === undefined ? { ok: true } : value;
     }),
   );
-}
+server.tool(
+  "ejecutar_accion",
+  "Ejecutar una acción autorizada o solicitar revisión; las conexiones nuevas no tienen permisos",
+  {
+    action: z.enum(Object.keys(actions)),
+    arguments: z.record(z.unknown()),
+    request_id: z.string().max(100).optional(),
+    base: z.string().max(1024).optional(),
+    purpose: z.string().max(500).optional(),
+  },
+  out((p) =>
+    b.request(p.action, p.arguments, {
+      request_id: p.request_id,
+      base: p.base,
+      purpose: p.purpose,
+    }),
+  ),
+);
+server.tool(
+  "estado_propuesta",
+  "Consultar únicamente una propuesta propia y su respuesta",
+  { id: z.string() },
+  out((p) => b.proposalStatus(p)),
+);
+server.tool(
+  "entregar_propuesta",
+  "Entregar un archivo de propuesta preparado sin conexión; nunca lo aplica automáticamente",
+  {
+    version: z.literal(1),
+    request_id: z.string(),
+    action: z.enum(Object.keys(actions)),
+    args: z.record(z.unknown()),
+    base: z.string().optional(),
+    purpose: z.string(),
+    connection_id: z.string().optional(),
+    delivery: z.string().optional(),
+  },
+  out((p) => b.submitProposal(p)),
+);
+server.tool(
+  "permisos_conexion",
+  "Consultar los permisos propios sin acceder a datos financieros",
+  {},
+  out(() => b.permissions()),
+);
 await server.connect(new StdioServerTransport());
-process.on("SIGINT", () => {
-  b.close();
+const stop = () => {
+  owner.close();
   process.exit(0);
+};
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
+process.stdin.on("end", () => {
+  if (owner.db.open) owner.close();
 });

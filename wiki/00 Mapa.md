@@ -1,7 +1,7 @@
 ---
 tipo: mapa
 actualizado: 2026-10-24
-verificado-en: 1c4cca5
+verificado-en: c084aa9 + cambios locales 0.2.0
 ---
 
 # Mapa de Nemein
@@ -39,6 +39,7 @@ verificado-en: 1c4cca5
 
 - **v0.1.0 publicada** como pre-release en GitHub, con instalador NSIS, su checksum y una variante autofirmada (ver `VALIDACION.md` y `SIGNING.md`).
 - **Decidido por Igor:** ADR-0001 (permisos: por defecto nada), ADR-0002 (bandeja de propuestas) y ADR-0003 (Nemein como referencia para Resto-tech).
+- **MEDIDO en 0.2.0 local:** [permisos por acción y bandeja de propuestas](Modulos/Permisos-y-propuestas.md), integrados con CLI, MCP y eventos. HTTP como transporte de integración sigue aplazado.
 - **Siguiente:** ver `Plan.md`.
 
 ## Interoperabilidad

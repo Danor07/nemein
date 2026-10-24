@@ -48,3 +48,15 @@
 - Resolución de instalación y rechazo de target, desktop-resources, árboles Git e instalaciones incompletas.
 - Sin instalación: página funcional con aviso y exportación 503 NEMEIN_NOT_INSTALLED.
 - Pruebas con instalaciones sintéticas; sin instalación NSIS real ni instalador nuevo en esta etapa. P1/P2 pendientes.
+## P1/P2 — permisos y propuestas, versión local 0.2.0 (24/10/2026)
+
+- 48/48 pruebas del comando del proyecto aprobadas, con bases temporales. Incluyen límites, revocación/rotación/versiones, idempotencia, aprobación única, modificación/rechazo, conflictos, archivos offline, paginación y migración concurrente.
+- Nueve vectores JSON portables de política y esquema de archivo de propuesta. La evaluación de permisos se comparte entre CLI y MCP.
+- Formularios de permisos y propuestas verificados por HTTP directo, con CSRF y controles de origen intactos. El navegador automatizado rechazó el POST por origen; no se completó allí una aceptación interactiva.
+- Inspección visual de la nueva pantalla a 360 × 800 y 1441 × 900 efectivos, sin desborde horizontal, incluso con reglas expandidas. Zoom al 200 % y equipo limpio siguen pendientes.
+- Ejecutable Tauri 0.2.0 recompilado con el ícono N aprobado. Arranque nativo con presupuesto temporal, HTTP 200, Chart.js local y cierre del motor comprobados.
+- Instalador NSIS generado y ejecutado como actualización de la instalación existente. Registro y runtime confirman 0.2.0. Copia SQLite previa conservada; no se ingresaron ni modificaron movimientos financieros personales.
+- Ejecutable e instalador firmados con el certificado autofirmado de Innova-tech y sello de tiempo. Windows sigue indicando raíz no confiable; no se agregó confianza al certificado.
+- MCP probado desde Node y módulos de la instalación, usando sólo datos temporales: configuración estable, denegación predeterminada, lectura concedida, propuesta aprobada y revocación inmediata.
+- La release pública v0.1.0 permanece intacta. No se publicó v0.2.0. Las configuraciones anteriores deben reenlazarse con un token creado manualmente por el propietario.
+- HTTP/OpenAPI/SSE, sincronización entre dispositivos, plugins WASM y entrega externa P4b no forman parte de esta entrega.
