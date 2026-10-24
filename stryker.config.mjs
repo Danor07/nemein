@@ -1,0 +1,38 @@
+export default {
+  mutate: [
+    "src/policy.js",
+    "public/mcp-download.js",
+    "src/sqlite-startup.js",
+    "src/credentials.js",
+    "src/agent-config.js",
+    "scripts/mutation-gate.js",
+  ],
+  testRunner: "command",
+  commandRunner: {
+    command:
+      "node --test test/properties/policy.property.test.js test/credentials.test.js test/agent-config.test.js test/mutation-gate.test.js test/sqlite-startup.test.js test/mcp-download.test.js",
+  },
+  coverageAnalysis: "off",
+  concurrency: 2,
+  timeoutMS: 5000,
+  timeoutFactor: 2,
+  reporters: ["clear-text", "json", "html"],
+  thresholds: { high: 90, low: 90, break: 90 },
+  ignorePatterns: [
+    "**",
+    "!src/**",
+    "!views/**",
+    "!public/**",
+    "!test/properties/policy.property.test.js",
+    "!test/credentials.test.js",
+    "!test/agent-config.test.js",
+    "!test/helpers/installed.js",
+    "!test/mutation-gate.test.js",
+    "!test/sqlite-startup.test.js",
+    "!test/mcp-download.test.js",
+    "!scripts/mutation-gate.js",
+    "!package.json",
+  ],
+  tempDirName: ".stryker-tmp",
+  cleanTempDir: true,
+};

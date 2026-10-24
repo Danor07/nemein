@@ -727,3 +727,22 @@ summary:focus-visible {
   padding: 7px;
   font-size: 11px;
 }
+
+:root {
+  --feedback-success-bg: #eaf0e9;
+  --feedback-success-ink: #355b4e;
+  --feedback-error-bg: #fcebe6;
+  --feedback-error-ink: #a13832;
+}
+.action-button { display: inline-grid; max-width: 100%; min-height: 44px; }
+.action-size, .action-content { grid-area: 1 / 1; white-space: nowrap; }
+.action-size { visibility: hidden; }
+.action-content { display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 150ms ease-out; }
+.action-button[data-state=loading] .action-content { opacity: 0.7; }
+.action-button[data-state=prepared] { background: var(--feedback-success-bg); color: var(--feedback-success-ink); }
+.action-button[data-state=error] { background: var(--feedback-error-bg); color: var(--feedback-error-ink); }
+.action-button:disabled { cursor: wait; filter: none; }
+.action-button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.action-feedback[data-kind=error] { color: var(--feedback-error-ink); }
+
+[data-feedback-icon]:empty { display: none; }

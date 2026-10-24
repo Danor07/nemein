@@ -1,9 +1,6 @@
 // Planning shares the ledger; a forecast never changes a balance.
 export function planning(b, { money, date, month, today }) {
   const db = b.db;
-  db.exec(`CREATE TABLE IF NOT EXISTS goals(category_id INTEGER PRIMARY KEY REFERENCES categories(id),amount INTEGER NOT NULL CHECK(amount>0),due_date TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS recurring(id INTEGER PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES accounts(id),category_id INTEGER REFERENCES categories(id),payee TEXT NOT NULL,amount INTEGER NOT NULL,next_date TEXT NOT NULL,frequency TEXT NOT NULL,anchor_day INTEGER NOT NULL,active INTEGER NOT NULL DEFAULT 1);
-    CREATE TABLE IF NOT EXISTS recurring_occurrences(recurring_id INTEGER NOT NULL REFERENCES recurring(id),due_date TEXT NOT NULL,transaction_id INTEGER,PRIMARY KEY(recurring_id,due_date));`);
   const validCategory = id => {
     if (!db.prepare('SELECT id FROM categories WHERE id=?').get(Number(id))) throw Error('Elegí una categoría existente.');
     return Number(id);

@@ -1,3 +1,5 @@
+import { migrate } from "./migrations.js";
+import { enableWal } from "./sqlite-startup.js";
 import { attachAccess } from "./access.js";
 import { attachEvents } from "./events.js";
 import Database from "better-sqlite3";
@@ -62,24 +64,15 @@ const text = (v) => {
 export function openBudget(dir = defaultDir()) {
   mkdirSync(dir, { recursive: true });
   const db = new Database(path.join(dir, "budget.db"));
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  db.pragma("busy_timeout = 5000");
-  if (db.pragma("user_version", { simple: true }) < 1)
-    db.transaction(() => {
-      db.exec(`CREATE TABLE accounts(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE,type TEXT NOT NULL CHECK(type IN ('corriente','credito','efectivo')));
- CREATE TABLE groups_(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE);
- CREATE TABLE categories(id INTEGER PRIMARY KEY,group_id INTEGER NOT NULL REFERENCES groups_(id),name TEXT NOT NULL,UNIQUE(group_id,name));
- CREATE TABLE allocations(month TEXT NOT NULL,category_id INTEGER NOT NULL REFERENCES categories(id),amount INTEGER NOT NULL,PRIMARY KEY(month,category_id));
- CREATE TABLE transactions(id INTEGER PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES accounts(id),date TEXT NOT NULL,payee TEXT NOT NULL,amount INTEGER NOT NULL,category_id INTEGER REFERENCES categories(id),kind TEXT NOT NULL DEFAULT 'normal',cleared INTEGER NOT NULL DEFAULT 0,reconciled INTEGER NOT NULL DEFAULT 0,import_key TEXT UNIQUE,transfer_key TEXT);
- CREATE INDEX tx_date ON transactions(date); CREATE INDEX tx_account ON transactions(account_id);
- CREATE TABLE memory(payee TEXT PRIMARY KEY,category_id INTEGER NOT NULL REFERENCES categories(id));
- CREATE TABLE mappings(account_id INTEGER PRIMARY KEY REFERENCES accounts(id),config TEXT NOT NULL);
- CREATE TABLE reconciliations(id INTEGER PRIMARY KEY,account_id INTEGER NOT NULL REFERENCES accounts(id),date TEXT NOT NULL,balance INTEGER NOT NULL);
- INSERT INTO groups_(name) VALUES ('Esenciales'),('Estilo de vida'),('Ahorro');
- INSERT INTO categories(group_id,name) VALUES (1,'Alimentación'),(1,'Vivienda'),(1,'Servicios'),(1,'Transporte'),(2,'Salidas'),(2,'Suscripciones'),(3,'Fondo de emergencia');
- PRAGMA user_version=1;`);
-    })();
+  try {
+    db.pragma("busy_timeout = 5000");
+    db.pragma("foreign_keys = ON");
+    migrate(db);
+    enableWal(db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   const all = (sql, ...args) => db.prepare(sql).all(...args),
     one = (sql, ...args) => db.prepare(sql).get(...args),
     run = (sql, ...args) => db.prepare(sql).run(...args);
@@ -332,7 +325,7 @@ export function openBudget(dir = defaultDir()) {
           ),
         };
       } catch (e) {
-        throw Error(`Fila ${i + 2}: ${e.message}`);
+        throw Error(`Fila ${i + 2}: ${e.message}`, {cause:e});
       }
     });
     return { headers, rows };
@@ -366,7 +359,7 @@ export function openBudget(dir = defaultDir()) {
       m,
     );
     const history = [];
-    let [y, mo] = m.split("-").map(Number);
+    const [y, mo] = m.split("-").map(Number);
     for (let i = 11; i >= 0; i--) {
       const dt = new Date(Date.UTC(y, mo - 1 - i, 1)),
         key = dt.toISOString().slice(0, 7);

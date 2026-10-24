@@ -37,7 +37,7 @@ test("base cero, acumulación, sobreasignación y meses futuros", (t) => {
     amount: -80000,
     category_id: 1,
   });
-  let s = b.snapshot("2026-01");
+  const s = b.snapshot("2026-01");
   assert.equal(s.ready, 700000);
   assert.equal(s.categories[0].available, 220000);
   assert.equal(b.snapshot("2026-02").categories[0].available, 220000);

@@ -60,3 +60,47 @@
 - MCP probado desde Node y módulos de la instalación, usando sólo datos temporales: configuración estable, denegación predeterminada, lectura concedida, propuesta aprobada y revocación inmediata.
 - La release pública v0.1.0 permanece intacta. No se publicó v0.2.0. Las configuraciones anteriores deben reenlazarse con un token creado manualmente por el propietario.
 - HTTP/OpenAPI/SSE, sincronización entre dispositivos, plugins WASM y entrega externa P4b no forman parte de esta entrega.
+
+## Migraciones numeradas y formularios — código 0.2.1 (24/10/2026)
+
+- 58/58 pruebas aprobadas: las 48 anteriores y diez escenarios de migración.
+- SQL histórico congelado de los tags v0.1.0 y v0.2.0; actualización de esas bases y del esquema intermedio de eventos, con datos ficticios.
+- Preservación de movimientos conciliados, saldos, categorías propias, metas, recurrentes, tokens, reglas, solicitudes, propuestas y cursor/identidad. Sin historia financiera inventada.
+- Secuencia 1–5, registro con nombre/hash/fecha, hashes independientes de CRLF/LF y actualización completa bajo una transacción inmediata.
+- Reapertura idempotente, prefijo numerado pendiente, tres aperturas concurrentes, rollback de un fallo tardío y posterior reintento. Se rechazan versiones futuras, historial alterado y bases no reconocidas.
+- Reproducción real en navegador del POST de conexión con Origin:null causado por Referrer-Policy:no-referrer. Se cambia a same-origin; un clic real crea la conexión y la cabecera enviada conserva el origen local.
+- Se mantienen los rechazos de Origin:null, origen ajeno, otro puerto, Host ajeno y CSRF inválido. No se agregan excepciones para WebView ni se elimina la guarda de origen.
+- Ejecutable 0.2.1 compilado y comprobado con presupuesto temporal: HTTP 200, Chart.js local y cierre del motor.
+- La automatización de ventanas Windows no respondió; el clic se verificó en navegador y el arranque nativo mediante la prueba de escritorio.
+- Instalación local 0.2.1 confirmada por registro NSIS y runtime. Firma de aplicación e instalador de Innova-tech con sello de tiempo; raíz autofirmada sin confianza pública automática.
+- Presupuesto existente respaldado antes de actualizar. Migración real al esquema 5 verificada comparando huellas de todos los registros previos, sin diferencias.
+- MCP de la instalación comprobado con datos temporales: denegación inicial, lectura concedida, aprobación de propuesta y revocación. Arranque y cierre nativo instalado comprobados con presupuesto temporal.
+- Archivos del código instalado comparados con el checkout. La release pública 0.2.0 no se modifica y 0.2.1 no se publica en esta etapa.
+## Preparación 0.2.2 — privacidad y gates de calidad (24/10/2026)
+
+- Configuración MCP sin token visible, con BUDGET_AGENT_TOKEN_FILE; prioridad del archivo sobre un token heredado. MCP/CLI conservan compatibilidad con la variable anterior.
+- Archivos restringidos al usuario y SYSTEM en Windows. ACL efectiva comprobada; creación exclusiva, formato y errores probados. El token permanece como secreto local sin cifrado adicional.
+- Configuraciones nuevas requieren runtime 0.2.2; se rechazan LocalCache de MSIX, árboles de desarrollo y enlaces fuera de la instalación. Los clientes se reenlazan desde la instalación normal de Windows.
+- ESLint sin advertencias, PBT/fuzzing y mutación ampliada a cuatro módulos. Primer intento 84,11 % rechazado; tras reforzar pruebas, 95,08 % (348/366), sin timeouts ni errores, con umbral 90 % intacto.
+- rustfmt y Clippy locales pasan con advertencias tratadas como errores. Ejecución remota del workflow en preparación; no se afirma todavía su aprobación.
+- Actualizados csv-parse y zod y corregidas dependencias indirectas afectadas; npm audit informa cero vulnerabilidades.
+- Las migraciones SQL numeradas permanecen inalteradas y se conserva el esquema 5. El instalador 0.2.2 se prepara para ejecución desde el Explorador; no se instala de nuevo desde el contexto MSIX de Codex.
+
+## Cierre de CI y paquete 0.2.2 (24/10/2026)
+
+- CI sobre fca6ad5: Quality gate Linux y Native static gate Windows aprobados. Incluye AST/linter, regresiones, propiedades, fuzzing, mutación, rustfmt y Clippy sin advertencias.
+- Sobre fca6ad5: Windows del runner aprobó 86/86 sin omisiones; Linux aprobó 85/86 y omitió sólo ACL Windows. El entorno Windows local aprobó 85/86 y omitió creación de symlink de archivo por falta de privilegio. No se confunden las capacidades del runner con las del equipo local.
+- Mutación Linux: 397/416 detectados, 95,43 %, 19 supervivientes, sin timeouts, errores ni casos sin cobertura.
+- El primer job Windows rechazó permisos adicionales de Administradores en la credencial y SQLITE_BUSY durante el cambio concurrente a WAL. Se corrigen ambos: ACL antes de escribir el secreto y reintento acotado del arranque. No se modifica SQL histórico ni se relajan tests.
+- MCP del runtime empaquetado: versión 0.2.2, 22 herramientas, archivo de credencial prioritario sobre variable heredada, denegación inicial, lectura concedida y denegación posterior. Prueba con datos ficticios. Los 32 archivos de aplicación coinciden con el checkout; payload sin datos privados ni herramientas de desarrollo.
+- Ejecutable nativo 0.2.2 con runtime actualizado: HTTP 200, Chart.js local y cierre del motor. Configuración visible comprobada en navegador con conexión ficticia, sin token. Chrome bloqueó el envío de descarga de la prueba; su respuesta y contenido se verificaron por el test HTTP. No se eludió el bloqueo del navegador.
+- La instalación 0.2.1 desde el Explorador fue confirmada por el usuario. Las afirmaciones históricas de instalación y registro comprobadas dentro de Codex/MSIX no equivalen a una instalación normal de Windows. Instalar 0.2.2 desde el Explorador y renovar/re-enlazar la configuración sigue siendo un paso manual pendiente.
+- La prueba en equipo limpio y la instalación 0.2.2 fuera de MSIX siguen pendientes. No se hizo merge ni se publicó una release nueva; protección de rama administrativa no configurada por esta tarea.
+
+## Revisión posterior y respuesta del botón (24/10/2026)
+
+- whoami.exe e icacls.exe usan SystemRoot/System32; credenciales comprobadas también desde Git Bash.
+- Propiedad con otherwise inválido y regresión por el llamador real: una regla restaurada no puede permitir operaciones fuera de sus límites.
+- El job Windows incorpora compilación de NSIS, instalación silenciosa en runner nuevo, registro, destino del acceso directo, MCP instalado, credenciales y arranque nativo. Su resultado se revisa antes de fusionar.
+- Medición visual efectiva: 1441 × 900 y 360 × 800, sin desborde horizontal. El botón conserva 222,295 px en escritorio y 249,272 px en celular entre reposo y preparación. Se corrigió un salto de 8 px detectado al aparecer el ícono.
+- Clic y Enter comprobados en navegador con datos ficticios. Revocar la conexión desde otra vista causa un error persistente con role=alert y Reintentar; el botón conserva su ancho. La prueba no afirma una escritura en disco que el navegador no puede confirmar.

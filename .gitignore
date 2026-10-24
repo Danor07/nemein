@@ -40,3 +40,9 @@ cero-mcp.json
 Thumbs.db
 
 nemein-mcp.json
+
+.stryker-tmp/
+reports/
+coverage/
+
+credential-*/

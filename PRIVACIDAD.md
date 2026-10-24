@@ -10,11 +10,11 @@ No adjuntes bases, extractos, propuestas, configuraciones de cliente ni CSV real
 
 ## Conexiones y permisos desde 0.2.0
 
-CLI y MCP requieren una conexión creada en la aplicación, mediante BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION. Cada acción empieza negada. El propietario elige permitir, preguntar o negar, con límites opcionales por importe y cuenta.
+CLI y MCP requieren una conexión creada en la aplicación. Desde 0.2.2 usan BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION; BUDGET_AGENT_TOKEN se conserva por compatibilidad con clientes anteriores. Cada acción empieza negada. El propietario elige permitir, preguntar o negar, con límites opcionales por importe y cuenta.
 
 BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no conceden permisos. Las configuraciones anteriores deben volver a enlazarse. Los agentes no administran sus propias reglas.
 
-Los tokens originales sólo se muestran al crear o renovar una conexión. La base almacena su SHA-256; el cliente guarda el token en su configuración privada. La descarga con token requiere CSRF y queda disponible diez minutos en memoria de esa sesión. Revocar una conexión o cambiar permisos se comprueba en pedidos nuevos; una consulta ya iniciada puede terminar.
+La base almacena el SHA-256 del token. Desde 0.2.2, el valor original se guarda en un archivo local restringido y la configuración del cliente contiene su ruta. La exportación requiere CSRF y queda disponible diez minutos en memoria de esa sesión. Los formatos anteriores incluían el token en la configuración. Revocar una conexión o cambiar permisos se comprueba en pedidos nuevos; una consulta ya iniciada puede terminar.
 
 La configuración apunta a la instalación estable compatible de Nemein, conservando la carpeta de presupuesto seleccionada. No se exportan rutas de compilación.
 
@@ -35,3 +35,9 @@ La aplicación está pensada para una persona en un equipo de confianza. La inte
 Un cliente MCP o una terminal pueden guardar o reenviar lo consultado. Si el agente usa un modelo en la nube, sus consultas pueden llegar al proveedor elegido por el usuario. El cursor es una posición de lectura, no una contraseña.
 
 Compatibilidad: carpeta de datos e identificador de instalación anteriores se conservan para no perder presupuestos.
+
+## Configuración MCP sin token visible (código en desarrollo)
+
+La configuración usa BUDGET_AGENT_TOKEN_FILE y guarda únicamente la ruta a connection.env. CLI y MCP leen el archivo directamente; éste prevalece sobre un token heredado en el entorno. La credencial se conserva en un directorio privado: permisos del usuario y SYSTEM en Windows, y archivo 0600 en otros sistemas. La interfaz no muestra el valor. El token sigue siendo un secreto local accesible a procesos del mismo usuario; no está cifrado. No compartir ese archivo. Las configuraciones anteriores contienen el token; para adoptar el formato nuevo hay que renovar y reenlazar la conexión desde la versión actualizada. La versión 0.2.2 incorpora este formato; para actualizar una instalación 0.2.1 hay que instalar el paquete nuevo desde el Explorador y renovar la configuración.
+
+Las rutas MSIX LocalCache se rechazan como instalaciones NSIS estables en el código nuevo. Instalar desde el Explorador fuera de Codex; una comprobación hecha desde Codex no sustituye la verificación fuera de su contexto MSIX.

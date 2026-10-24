@@ -22,17 +22,6 @@ export const eventOperations = Object.freeze([
 
 export function attachEvents(budget) {
   const db = budget.db;
-  db.transaction(() => {
-    db.exec(`CREATE TABLE IF NOT EXISTS event_identity (
-      singleton INTEGER PRIMARY KEY CHECK(singleton=1), source TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS budget_events (
-      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-      id TEXT NOT NULL UNIQUE, envelope TEXT NOT NULL CHECK(json_valid(envelope)));
-    `);
-    db.prepare(
-      "INSERT INTO event_identity VALUES (1,?) ON CONFLICT(singleton) DO NOTHING",
-    ).run("urn:uuid:" + randomUUID());
-  }).immediate();
   const source = db
     .prepare("SELECT source FROM event_identity WHERE singleton=1")
     .get().source;

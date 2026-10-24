@@ -3,7 +3,7 @@
 Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en %LOCALAPPDATA%\PresupuestoCero; usar BUDGET_DATA_DIR temporal para pruebas, nunca sembrar ejemplos en el presupuesto real.
 
 - Crear una conexión en **Permisos y propuestas**, guardar su configuración y asignar acciones a mano. Sin regla vigente, se niega.
-- CLI y MCP requieren BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION (1 por defecto). BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no autorizan nada.
+- CLI y MCP usan BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION (1 por defecto). BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no autorizan nada.
 - CLI: nemein.cmd help. Cada comando acepta JSON, --file o --stdin; stdout JSON, errores en stderr con code y salida no cero.
 - Consultar permisos propios con permissions o permisos_conexion (MCP). El catálogo de herramientas no implica autorización.
 - snapshot, overview, search, goals, recurring, reports y cube mantienen las validaciones del dominio. Importes enteros; cube permite entre una y tres dimensiones month/day/account/category/payee, con fechas from/to.
@@ -16,5 +16,11 @@ Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en
 - La interfaz local es del propietario de confianza. Estos permisos no aíslan otros programas del mismo usuario del sistema.
 - npm test usa presupuestos temporales. Actualizar los runtimes de escritorio al cambiar src, views o public; distribuir código de uso diario mediante instalador, nunca con rutas target.
 
+Migraciones: src/migrations.js y src/migrations/. Agregar cambios con un número nuevo; no editar SQL ya distribuido. Actualizar la validación y probar bases antiguas, reapertura y rollback. Ver docs/migraciones.md.
+
 Fuentes: src/actions.js (catálogo), src/access.js (política y propuestas), docs/permisos-y-propuestas.md (contratos).
 Compatibilidad: datos en %LOCALAPPDATA%\PresupuestoCero e identificador local.presupuesto.cero conservados.
+
+## Calidad obligatoria
+
+Ejecutar npm run quality antes de entregar cambios. Incluir Property-Based Testing, fuzzing adversarial y ampliar la mutación para las decisiones modificadas. Análisis estático sin advertencias; no reducir umbrales ni excluir invariantes para obtener verde. Código, pruebas y configuración de CI requieren revisión. Ver [Control de calidad](docs/calidad.md).

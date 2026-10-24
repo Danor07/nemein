@@ -4,9 +4,9 @@ Las interfaces CLI y MCP comparten el catálogo de src/actions.js y la política
 
 ## Conectar un cliente
 
-En **Permisos y propuestas**, creá una conexión y guardá su configuración. El token aparece una sola vez; renovarlo invalida el anterior. Elegí permitir, preguntar o negar para cada acción. Sin una regla vigente, el pedido se niega.
+En **Permisos y propuestas**, creá una conexión y guardá su configuración. La credencial se guarda en un archivo privado; renovarla invalida el token anterior. Elegí permitir, preguntar o negar para cada acción. Sin una regla vigente, el pedido se niega.
 
-La exportación MCP requiere Nemein instalado, versión 0.2.0 o posterior. CLI usa BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION. La descarga está protegida por CSRF y disponible durante diez minutos.
+La exportación MCP requiere Nemein instalado, versión 0.2.2 o posterior. CLI usa BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION; la variable BUDGET_AGENT_TOKEN se conserva por compatibilidad. La descarga está protegida por CSRF y disponible durante diez minutos.
 
 ## Política
 
@@ -47,6 +47,6 @@ El esquema está en src/contracts/proposal-file.schema.json. El archivo no inclu
 
 Las conexiones, reglas, decisiones, solicitudes y propuestas se guardan en SQLite. Los tokens se generan con 32 bytes aleatorios y se almacenan como hashes SHA-256. Las escrituras autorizadas, su resultado idempotente, auditoría y evento se confirman juntos. Las consultas comprueban permiso y auditoría antes de leer. Los respaldos asíncronos admiten permitir o negar; no aprobación diferida.
 
-La migración es transaccional e idempotente. Restaurar un backup restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes. La interfaz muestra las cien decisiones recientes y pagina las propuestas de a cincuenta; los registros anteriores permanecen en la base.
+El esquema usa [migraciones numeradas](migraciones.md), transaccionales e idempotentes. Restaurar un backup restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes. La interfaz muestra las cien decisiones recientes y pagina las propuestas de a cincuenta; los registros anteriores permanecen en la base.
 
 Estos controles autorizan registros locales. No ejecutan pagos bancarios ni revierten hechos ocurridos fuera de Nemein.

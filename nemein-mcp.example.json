@@ -7,8 +7,8 @@
       ],
       "env": {
         "BUDGET_DATA_DIR": "C:\\RUTA_PRIVADA\\PresupuestoCero",
-        "BUDGET_AGENT_TOKEN": "TOKEN_DE_TU_CONEXION",
-        "BUDGET_AGENT_VERSION": "1"
+        "BUDGET_AGENT_VERSION": "1",
+        "BUDGET_AGENT_TOKEN_FILE": "C:\\RUTA_PRIVADA\\PresupuestoCero\\credential-ID\\connection.env"
       }
     }
   }

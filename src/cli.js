@@ -1,3 +1,4 @@
+import { readAgentToken } from "./credentials.js";
 import { readFileSync } from "node:fs";
 import { openBudget } from "./core.js";
 import { commands, execute, proposalFile } from "./commands.js";
@@ -19,7 +20,7 @@ if (command === "help")
           "permissions",
         ],
         authentication:
-          "BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION (1 por defecto), creados en Permisos y propuestas. Sin permisos por defecto.",
+          "BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION (1 por defecto), creados en Permisos y propuestas. BUDGET_AGENT_TOKEN se mantiene por compatibilidad. Sin permisos por defecto.",
         watch:
           "watch --after CURSOR [--limit 100] [--poll-ms 1000] [--format ndjson|json-seq] [--once]",
         proposals:
@@ -65,18 +66,16 @@ else {
     if (command === "proposal-create")
       console.log(JSON.stringify({ ok: true, result: proposalFile(p) }));
     else {
-      if (!process.env.BUDGET_AGENT_TOKEN)
+      const token = readAgentToken();
+      if (!token)
         throw Object.assign(
           new Error(
-            "Configurá BUDGET_AGENT_TOKEN desde Permisos y propuestas.",
+            "Configurá BUDGET_AGENT_TOKEN_FILE desde Permisos y propuestas.",
           ),
           { code: "AUTH_REQUIRED" },
         );
       owner = openBudget();
-      const b = owner.forAgent(
-        process.env.BUDGET_AGENT_TOKEN,
-        process.env.BUDGET_AGENT_VERSION || "1",
-      );
+      const b = owner.forAgent(token, process.env.BUDGET_AGENT_VERSION || "1");
       if (command === "watch") {
         process.on("SIGINT", stop);
         process.on("SIGTERM", stop);

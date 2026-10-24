@@ -8,10 +8,11 @@ export function fakeInstall(root) {
     "runtime/node.exe",
     "runtime/src/mcp.js",
     "runtime/src/access.js",
+    "runtime/src/credentials.js",
   ])
     writeFileSync(path.join(root, f), "fixture");
   writeFileSync(
     path.join(root, "runtime", "package.json"),
-    JSON.stringify({ name: "nemein", version: "0.2.0" }),
+    JSON.stringify({ name: "nemein", version: "0.2.2" }),
   );
 }

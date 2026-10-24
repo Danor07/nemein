@@ -1,3 +1,5 @@
+import {decide,evaluatePolicy} from "./policy.js";
+export {decide,evaluatePolicy} from "./policy.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { actions, actionVersion, callArgs, payload } from "./actions.js";
@@ -29,78 +31,9 @@ function canonical(value) {
     );
   return value;
 }
-export function decide(rule, action, p) {
-  if (
-    !Object.hasOwn(actions, action) ||
-    !rule ||
-    rule.action_version !== actionVersion
-  )
-    return { decision: "deny", reason: "Sin permiso vigente" };
-  if (
-    !["allow", "ask", "deny"].includes(rule.decision) ||
-    rule.decision === "deny"
-  )
-    return { decision: "deny", reason: "Permiso negado por el propietario" };
-  const c = rule.conditions || {};
-  let matches = true;
-  if (c.max_amount !== undefined) {
-    const field = actions[action].money,
-      v = p[field] ?? (field === "balance" ? 0 : undefined);
-    matches =
-      matches &&
-      /^-?\d+$/.test(String(v)) &&
-      Number.isSafeInteger(Number(v)) &&
-      Math.abs(Number(v)) <= c.max_amount;
-  }
-  if (c.account_id !== undefined)
-    matches = matches && Number(p[actions[action].account]) === c.account_id;
-  return {
-    decision: matches ? rule.decision : c.otherwise || "deny",
-    reason: matches
-      ? "Regla de la conexión"
-      : "Fuera de los límites de la regla",
-  };
-}
-
-export function evaluatePolicy({ actor, rule, action, args }) {
-  if (
-    !actor ||
-    ![true, 1].includes(actor.active) ||
-    !rule ||
-    rule.connection_id !== actor.id ||
-    rule.connection_version !== actor.version
-  )
-    return {
-      decision: "deny",
-      reason: "Conexión o versión sin permiso vigente",
-    };
-  return decide(rule, action, args);
-}
 export function attachAccess(budget) {
   const db = budget.db,
     originals = {};
-  db.transaction(() => {
-    db.exec(`CREATE TABLE IF NOT EXISTS agent_connections(
-    id TEXT PRIMARY KEY,label TEXT NOT NULL,version TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS agent_rules(
-    connection_id TEXT NOT NULL REFERENCES agent_connections(id),connection_version TEXT NOT NULL,action TEXT NOT NULL,action_version INTEGER NOT NULL,
-    decision TEXT NOT NULL,conditions TEXT NOT NULL,PRIMARY KEY(connection_id,connection_version,action));
-    CREATE TABLE IF NOT EXISTS agent_audit(
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,at TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,args TEXT NOT NULL,decision TEXT NOT NULL,reason TEXT NOT NULL,reviewer TEXT);
-    CREATE TABLE IF NOT EXISTS agent_requests(
-    actor TEXT NOT NULL,request_id TEXT NOT NULL,fingerprint TEXT NOT NULL,result TEXT NOT NULL,PRIMARY KEY(actor,request_id));
-    CREATE TABLE IF NOT EXISTS agent_proposals(
-    id TEXT PRIMARY KEY,actor TEXT NOT NULL REFERENCES agent_connections(id),connection_version TEXT NOT NULL,request_id TEXT NOT NULL,
-    action TEXT NOT NULL,action_version INTEGER NOT NULL,args TEXT NOT NULL,base TEXT NOT NULL,purpose TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL,final_args TEXT,result TEXT,reason TEXT,resolved_at TEXT,UNIQUE(actor,request_id));`);
-    if (
-      !db
-        .prepare("PRAGMA table_info(agent_audit)")
-        .all()
-        .some((c) => c.name === "policy")
-    )
-      db.exec("ALTER TABLE agent_audit ADD COLUMN policy TEXT");
-  }).immediate();
   const run = (sql, ...args) => db.prepare(sql).run(...args);
   const one = (sql, ...args) => db.prepare(sql).get(...args);
   const all = (sql, ...args) => db.prepare(sql).all(...args);

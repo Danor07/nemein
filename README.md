@@ -1,59 +1,27 @@
 # Nemein — presupuesto personal local
 
-Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés. Un software de finanzas personales enfocado en workflows.
+Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés. Es un software de finanzas personales enfocado en workflows.
 
-Versión experimental. Código abierto bajo licencia MIT. Presupuesto base cero en guaraníes, con acceso para agentes mediante CLI y MCP.
+Presupuesto base cero en guaraníes enteros, con acceso para agentes mediante CLI y MCP. Interfaz de escritorio Tauri 2, servidor Express con páginas EJS, SQLite mediante better-sqlite3 y gráficos Chart.js locales. Sin usuarios, telemetría, credenciales bancarias ni sincronización bancaria.
 
-Aplicación de presupuesto base cero en guaraníes enteros. Interfaz de escritorio Tauri 2, servidor Express con páginas EJS, SQLite mediante better-sqlite3 y gráficos Chart.js locales. Sin usuarios, telemetría, credenciales bancarias ni sincronización bancaria.
+Versión experimental. Código abierto bajo licencia MIT.
 
+## Descargar e instalar en Windows
 
-## Descargar para Windows
+Descargá la versión más reciente desde [GitHub Releases](https://github.com/Danor07/nemein/releases): el archivo `Nemein-VERSIÓN-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
 
-La versión 0.2.0 está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.2.0). Descargá Nemein-0.2.0-windows-x64-selfsigned-setup.exe para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
+- **Instalá con doble clic desde el Explorador.** Si el instalador se abre desde una terminal de una app empaquetada (MSIX), como Codex, Windows lo instala dentro de la carpeta privada de esa app: el acceso del menú Inicio no funciona y la desinstalación no aparece en el sistema.
+- El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mostrar advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
+- `SHA256SUMS.txt` permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales.
 
-El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mantener advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
+### Actualizar
 
-SHA256SUMS.txt permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales. La release v0.1.0 conserva sus descargas originales.
+Antes de actualizar, guardá una copia de la carpeta de datos (ver [Dónde están tus datos](#dónde-están-tus-datos)). Las migraciones son numeradas y transaccionales, y conservan los datos de las bases anteriores ([migraciones](docs/migraciones.md)).
 
-**Al actualizar desde 0.1.0:** creá una conexión en Permisos y propuestas, elegí sus acciones y reenlazá tu cliente MCP/CLI con el nuevo token. Los interruptores antiguos de lectura/escritura ya no conceden acceso. Conservá un backup antes de actualizar.
+- **Desde 0.2.1 o anterior a 0.2.2:** la configuración MCP ya no contiene el token, sino la ruta a una credencial privada. Renová la conexión en **Permisos y propuestas** y volvé a enlazar tu cliente. Además, 0.2.2 rechaza instalaciones dentro de MSIX y corrige el rechazo de formularios con «Origen no permitido».
+- **Desde 0.1.0:** las conexiones comienzan sin permisos. Creá una conexión, elegí sus acciones y enlazá tu cliente MCP/CLI. `BUDGET_MCP_WRITE` y `BUDGET_EVENTS_READ` ya no conceden acceso.
 
-## Abrir y desarrollar
-
-Requisitos de desarrollo: Node.js 22+, Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: no requiere Node instalado para el usuario final.
-
-```powershell
-npm ci
-npm run desktop:dev
-```
-
-Para generar el instalador:
-
-```powershell
-npm run desktop:build
-```
-
-La preparación incluye las licencias de Node y las dependencias Rust. Si tu instalación de Node no trae un archivo LICENSE junto al ejecutable, indicá su ubicación con `NODE_LICENSE_PATH` antes de compilar. Las dependencias Rust deben estar disponibles en la caché local de Cargo; podés prepararla con `cargo fetch --manifest-path src-tauri/Cargo.toml`.
-
-El instalador NSIS queda en `src-tauri/target/release/bundle/nsis/`. También se puede usar como aplicación web local:
-
-```powershell
-npm start
-```
-
-La consola imprime la URL en 127.0.0.1 con un puerto libre. Nunca escucha en la red local. La ventana Tauri inicia y termina su servidor local automáticamente.
-
-## Dónde están tus datos
-
-En Windows, por defecto:
-
-- Base: `%LOCALAPPDATA%\PresupuestoCero\budget.db`.
-- Copias: `%LOCALAPPDATA%\PresupuestoCero\backups\budget-AAAA-MM-DD.db`.
-
-La variable `BUDGET_DATA_DIR` permite elegir otra carpeta, tanto para escritorio como para servidor, CLI y MCP. Todos deben usar la misma carpeta para compartir el presupuesto.
-
-La base usa WAL y claves foráneas. Se respalda con la API de backup de SQLite (no se copia solamente el archivo mientras el WAL está abierto). Se hace una copia al primer arranque de cada día; mientras la app permanece abierta se comprueba cada hora. Se guardan las últimas 30 copias diarias. No se hacen copias cuando la aplicación está cerrada. La copia de hoy preserva el primer estado respaldado ese día.
-
-Para restaurar: cerrá escritorio, servidor, CLI y MCP; guardá una copia de la carpeta de datos completa; reemplazá budget.db con la copia elegida y retirá los archivos budget.db-wal y budget.db-shm anteriores antes de volver a abrir. No combines archivos WAL de una base con otra. Las copias en el mismo disco no protegen contra pérdida del equipo.
+Qué cambió en cada versión: en las notas de cada [release](https://github.com/Danor07/nemein/releases).
 
 ## Primer uso
 
@@ -73,6 +41,15 @@ La deuda inicial de una tarjeta se ingresa con signo negativo y reduce Por presu
 ### Conciliación
 
 Elegí cuenta, fecha de extracto y saldo bancario real. Marcá los movimientos que aparecen en ese extracto. Los ya conciliados se suman automáticamente hasta esa fecha. **Calcular diferencia** no cambia datos. Solo se puede **Confirmar conciliación** cuando la diferencia es cero. Los seleccionados pasan a liquidados y conciliados; no pueden borrarse. Se puede corregir su categoría sin alterar fecha ni importe.
+
+## Qué más hace
+
+- **Resumen**: ingresos, gastos netos, categorías sin cubrir y próximos vencimientos.
+- **Metas y pagos**: objetivos por categoría y fecha. El progreso usa fondos disponibles; no crea ahorro ficticio. Recurrentes semanales, mensuales o anuales, con pausa/reactivación y registro explícito de cada vencimiento. Los días 29–31 se ajustan al último día de meses cortos y recuperan su día original en el mes siguiente.
+- **Movimientos**: búsqueda por beneficiario/categoría y filtro por cuenta, dentro del mes seleccionado.
+- **Reportes**: cruce cuenta × categoría y totales conservados. El motor `cube` permite hasta tres dimensiones (month/day/account/category/payee), con fechas inicial y final. Consulta directamente SQLite con dimensiones permitidas y conserva los totales entre agrupamientos.
+
+No se ejecutan pagos bancarios ni se registran recurrentes automáticamente. Registrar un vencimiento crea un movimiento local y avanza la fecha. Un reintento del mismo vencimiento devuelve error sin duplicar.
 
 ## Mapear el CSV de tu banco por primera vez
 
@@ -101,87 +78,38 @@ Los positivos del CSV se clasifican inicialmente como ingresos; los reintegros s
 
 La deduplicación compara cuenta + fecha + beneficiario + importe + número de ocurrencia dentro del archivo. Reimportar el mismo extracto no duplica registros y dos filas idénticas en el mismo extracto se conservan. Si dos extractos parciales contienen distintas operaciones idénticas del mismo día, sin identificador bancario no se pueden distinguir: revisá esos casos antes de confirmar. No cambies los textos ni importes de un archivo ya importado esperando que actualice operaciones.
 
+## Agentes: permisos y propuestas
 
-## Agentes: permisos y propuestas — versión 0.2.0
-
-Las conexiones de agentes ahora comienzan **sin permisos de lectura ni escritura**. BUDGET_MCP_WRITE y BUDGET_EVENTS_READ dejan de habilitar acciones. Las configuraciones anteriores deben volver a enlazarse desde la aplicación.
+Las conexiones de agentes comienzan **sin permisos de lectura ni escritura**.
 
 1. Abrí **Permisos y propuestas**.
-2. Creá una conexión para tu cliente y guardá la configuración con su token.
+2. Creá una conexión para tu cliente y guardá la configuración, que contiene la ruta a su credencial privada.
 3. Elegí permitir, preguntar o negar por acción. Podés limitar importe absoluto y cuenta.
-4. Importá la configuración en tu cliente MCP. Para CLI, usá BUDGET_AGENT_TOKEN y BUDGET_AGENT_VERSION.
+4. Importá la configuración en tu cliente MCP. Para CLI, usá `BUDGET_AGENT_TOKEN_FILE` y `BUDGET_AGENT_VERSION`.
 5. Los pedidos en preguntar aparecen en la bandeja. Podés aceptar, modificar con motivo o rechazar con motivo.
 
-El token se muestra una sola vez; renovar lo invalida para el cliente anterior. Podés revocar permisos en caliente. Las reglas nuevas o incompatibles quedan negadas hasta revisarlas.
+El token se guarda en un archivo privado y no aparece en la configuración ni en la página; renovarlo lo invalida para el cliente anterior. Podés revocar permisos en caliente. Las reglas nuevas o incompatibles quedan negadas hasta revisarlas.
+
+La configuración se descarga desde Nemein instalado. El generador verifica una instalación NSIS completa y rechaza `target`, `desktop-resources`, árboles Git y la carpeta privada de una app MSIX. Sin instalación compatible muestra cómo actualizarla; no exporta rutas de compilación. `NEMEIN_INSTALL_DIR` permite indicar una instalación personalizada.
 
 Para consultar con CLI:
 
     nemein.cmd permissions
     nemein.cmd event-snapshot --file examples/consulta.json
 
-Para pedir una acción revisable, el JSON incluye _base (cursor del snapshot), _purpose y un _request_id único. El resultado pending contiene proposal_id. Consultá:
+Para pedir una acción revisable, el JSON incluye `_base` (cursor del snapshot), `_purpose` y un `_request_id` único. El resultado pending contiene `proposal_id`. Consultá:
 
     nemein.cmd proposal-status --file estado-propuesta.json
 
-Para trabajar sin el equipo principal, proposal-create recibe {action,args,base,purpose,request_id} y genera un sobre sin abrir la base. Guardá .result como archivo JSON. Más tarde, proposal-submit --file propuesta.json lo entrega con el token del cliente, sin ejecutarlo. Estados de entrega: undelivered, delivered, responded. No hay transporte HTTP ni sincronización de red automática.
+Para trabajar sin el equipo principal, `proposal-create` recibe `{action,args,base,purpose,request_id}` y genera un sobre sin abrir la base. Guardá `.result` como archivo JSON. Más tarde, `proposal-submit --file propuesta.json` lo entrega con el token del cliente, sin ejecutarlo. Estados de entrega: undelivered, delivered, responded. No hay transporte HTTP ni sincronización de red automática.
 
-MCP incluye permisos_conexion, ejecutar_accion, estado_propuesta y entregar_propuesta. Los nombres anteriores siguen disponibles bajo sus permisos; las escrituras no devuelven implícitamente un snapshot que no haya sido autorizado.
+MCP incluye `permisos_conexion`, `ejecutar_accion`, `estado_propuesta` y `entregar_propuesta`. Los nombres anteriores siguen disponibles bajo sus permisos; las escrituras no devuelven implícitamente un snapshot que no haya sido autorizado. Otros comandos de CLI: overview, search, goals, goal-set, goal-remove, recurring, recurring-create, recurring-post, recurring-toggle, cube, category y group; sus parámetros están en [AGENTS.md](AGENTS.md).
 
 El detalle de contratos, conflictos, reintentos, límites y recuperación está en [Permisos y propuestas](docs/permisos-y-propuestas.md). Los tokens y los archivos de propuestas son privados. Estas reglas no aíslan programas que ya tienen acceso a los archivos del mismo usuario de Windows.
 
+### Eventos locales para workflows
 
-## Validación
-
-```powershell
-npm test
-```
-
-Pruebas con bases temporales: dinero entero y fechas, acumulación y sobreasignación, transferencias y tarjeta, importaciones atómicas/deduplicación/memoria, conciliación y bloqueo, integridad y retención de backups, SSR/CSRF/Host/origen, flujo HTTP completo, reportes y reintegros.
-
-`node scripts/preview.js` abre una vista previa con datos ficticios en `.preview-data/`, separada del presupuesto real.
-
-## Estructura
-
-- `src/core.js`: dominio, validación, migración inicial, SQLite y backups.
-- `src/server.js`: HTTP local, formularios y páginas SSR.
-- `views/`, `public/`: interfaz y gráficos sin CDN.
-- `src/cli.js`, `src/mcp.js`: acceso de agentes al mismo motor.
-- `src-tauri/`: ventana nativa y ciclo de vida del proceso Node.
-- `scripts/prepare-desktop.js`: empaqueta Node, módulos nativos y archivos locales.
-
-Para detalles sobre almacenamiento y agentes, consultá [PRIVACIDAD.md](PRIVACIDAD.md).
-
-En Windows PowerShell 5, preferí pasar JSON por archivo para evitar el escape de comillas: `node src/cli.js snapshot --file examples/consulta.json`. También se admite `--stdin`.
-
-## Mejoras del 23/10/2026
-
-Después de compilar con `npm run desktop:build`, podés abrir `Abrir Nemein.cmd` en Windows. El código fuente está en el repositorio y el instalador está en GitHub Releases. Los datos personales quedan fuera de ambos.
-
-- **Resumen**: ingresos, gastos netos, categorías sin cubrir y próximos vencimientos.
-- **Metas y pagos**: objetivos por categoría y fecha. El progreso usa fondos disponibles; no crea ahorro ficticio. Recurrentes semanales, mensuales o anuales, con pausa/reactivación y registro explícito de cada vencimiento. Los días 29–31 se ajustan al último día de meses cortos y recuperan su día original en el mes siguiente.
-- **Movimientos**: búsqueda por beneficiario/categoría y filtro por cuenta, dentro del mes seleccionado.
-- **Reportes**: cruce cuenta × categoría y totales conservados. El motor `cube` permite hasta tres dimensiones (month/day/account/category/payee), con fechas inicial y final. Consulta directamente SQLite con dimensiones permitidas y conserva los totales entre agrupamientos.
-- **Agentes y terminal**: configuración MCP descargable y CLI con `nemein.cmd`. Creá una conexión en Permisos y propuestas y descargá su configuración desde la versión instalada. El archivo local queda excluido de Git.
-
-Comandos nuevos: overview, search, goals, goal-set, goal-remove, recurring, recurring-create, recurring-post, recurring-toggle, cube, category y group. Consultá AGENTS.md para parámetros.
-
-No se ejecutan pagos bancarios ni se registran recurrentes automáticamente. Registrar un vencimiento crea un movimiento local y avanza la fecha. Un reintento del mismo vencimiento devuelve error sin duplicar.
-
-## Contribuir
-
-Preparación del entorno, estructura del código y criterios para cambios: [CONTRIBUTING.md](CONTRIBUTING.md). La documentación de contratos está en docs/.
-
-## Licencia
-
-MIT. Ver [LICENSE](LICENSE). Las dependencias mantienen sus respectivas licencias.
-
-Compatibilidad: la carpeta de datos sigue siendo `%LOCALAPPDATA%\PresupuestoCero` para conservar los presupuestos existentes. El identificador de instalación también se mantiene.
-
-## Eventos locales para workflows
-
-La versión 0.2.0 del código incluye snapshot consistente, lectura paginada y seguimiento por terminal. La release pública v0.1.0 todavía no incluye estos cambios.
-
-Concedé event-snapshot y events a tu conexión y configurá su token antes de ejecutar:
+Snapshot consistente, lectura paginada y seguimiento por terminal. Concedé event-snapshot y events a tu conexión y configurá su credencial antes de ejecutar:
 
     nemein.cmd event-snapshot --file examples/consulta.json
     nemein.cmd watch --after CURSOR --format ndjson
@@ -190,6 +118,48 @@ Guardá el snapshot junto con su cursor. Persistí el cursor después de procesa
 
 Contratos y límites: [Eventos](docs/eventos.md).
 
-## Rutas estables para MCP
+## Dónde están tus datos
 
-Descargá la configuración desde una conexión de Nemein instalado, versión 0.2.0 o posterior. El generador verifica una instalación NSIS completa y rechaza target, desktop-resources y árboles Git. Sin instalación compatible muestra cómo actualizarla; no exporta rutas de compilación. NEMEIN_INSTALL_DIR permite indicar una instalación personalizada.
+En Windows, por defecto:
+
+- Base: `%LOCALAPPDATA%\PresupuestoCero\budget.db`.
+- Copias: `%LOCALAPPDATA%\PresupuestoCero\backups\budget-AAAA-MM-DD.db`.
+
+La carpeta conserva el nombre `PresupuestoCero` para mantener los presupuestos existentes; el identificador de instalación también se mantiene. La variable `BUDGET_DATA_DIR` permite elegir otra carpeta, tanto para escritorio como para servidor, CLI y MCP. Todos deben usar la misma carpeta para compartir el presupuesto.
+
+La base usa WAL y claves foráneas. Se respalda con la API de backup de SQLite (no se copia solamente el archivo mientras el WAL está abierto). Se hace una copia al primer arranque de cada día; mientras la app permanece abierta se comprueba cada hora. Se guardan las últimas 30 copias diarias. No se hacen copias cuando la aplicación está cerrada. La copia de hoy preserva el primer estado respaldado ese día.
+
+Para restaurar: cerrá escritorio, servidor, CLI y MCP; guardá una copia de la carpeta de datos completa; reemplazá budget.db con la copia elegida y retirá los archivos budget.db-wal y budget.db-shm anteriores antes de volver a abrir. No combines archivos WAL de una base con otra. Las copias en el mismo disco no protegen contra pérdida del equipo. Restaurar una copia restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes.
+
+Más detalle en [PRIVACIDAD.md](PRIVACIDAD.md).
+
+## Desarrollar
+
+Requisitos: Node.js 22+, Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: el usuario final no necesita Node instalado.
+
+```powershell
+npm ci
+npm run desktop:dev
+```
+
+Para generar el instalador:
+
+```powershell
+npm run desktop:build
+```
+
+La preparación incluye las licencias de Node y las dependencias Rust. Si tu instalación de Node no trae un archivo LICENSE junto al ejecutable, indicá su ubicación con `NODE_LICENSE_PATH` antes de compilar. Las dependencias Rust deben estar disponibles en la caché local de Cargo; podés prepararla con `cargo fetch --manifest-path src-tauri/Cargo.toml`. El instalador NSIS queda en `src-tauri/target/release/bundle/nsis/`, y después de compilar podés abrir `Abrir Nemein.cmd`.
+
+También se puede usar como aplicación web local con `npm start`. La consola imprime la URL en 127.0.0.1 con un puerto libre; nunca escucha en la red local. La ventana Tauri inicia y termina su servidor local automáticamente. `node scripts/preview.js` abre una vista previa con datos ficticios en `.preview-data/`, separada del presupuesto real.
+
+Pruebas: `npm test` corre las de regresión, propiedades y fuzzing con bases temporales; `npm run quality` agrega ESLint y mutación. Qué cubre cada una y sus límites: [Control de calidad](docs/calidad.md).
+
+En Windows PowerShell 5, preferí pasar JSON por archivo para evitar el escape de comillas: `node src/cli.js snapshot --file examples/consulta.json`. También se admite `--stdin`.
+
+## Contribuir
+
+Preparación del entorno, estructura del código y criterios para cambios: [CONTRIBUTING.md](CONTRIBUTING.md). La documentación de contratos está en `docs/`.
+
+## Licencia
+
+MIT. Ver [LICENSE](LICENSE). Las dependencias mantienen sus respectivas licencias.

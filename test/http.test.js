@@ -27,6 +27,7 @@ test("pantallas SSR, CSRF, origen y guardado por HTTP", async (t) => {
   ]) {
     const r = await fetch(base + "/?view=" + view);
     assert.equal(r.status, 200, view);
+    assert.equal(r.headers.get("referrer-policy"), "same-origin");
     assert.match(await r.text(), /Nemein/);
   }
   const html = await (await fetch(base + "/?view=budget")).text(),
@@ -41,6 +42,30 @@ test("pantallas SSR, CSRF, origen y guardado por HTTP", async (t) => {
     ).status,
     403,
   );
+  for (const origin of ["null", "https://evil.example", base + "9"]) {
+    const rejected = await fetch(base + "/action/connection-create", {
+      method: "POST",
+      headers: { Origin: origin },
+      body: new URLSearchParams({
+        _csrf: csrf,
+        label: "Must not exist",
+        version: "1",
+      }),
+    });
+    assert.equal(rejected.status, 403);
+  }
+  assert.equal(b.accessState().connections.length, 0);
+  const connection = await fetch(base + "/action/connection-create", {
+    method: "POST",
+    headers: { Origin: base },
+    body: new URLSearchParams({
+      _csrf: csrf,
+      label: "Local origin fixture",
+      version: "1",
+    }),
+  });
+  assert.equal(connection.status, 200);
+  assert.equal(b.accessState().connections.length, 1);
   const body = new URLSearchParams({
     _csrf: csrf,
     name: "Banco",
