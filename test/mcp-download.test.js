@@ -136,8 +136,9 @@ test("download uses submit (including keyboard), reports only preparation and pr
   assert.equal(f.label.textContent, "Preparando…");
   assert.equal(f.status.role, "status");
   assert.equal(f.status.dataset.kind, "info");
-  await f.submit();
+  const duplicate = f.submit();
   assert.equal(f.calls.length, 1);
+  await duplicate;
   assert.equal(f.events.prevented, 2);
   assert.equal(f.status.textContent, "Preparando nemein-mcp.json…");
   resolve({ ok: true, status: 200, blob: async () => "configuration" });
