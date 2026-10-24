@@ -1,6 +1,6 @@
 # Firma de código
 
-Nemein ofrece en la release v0.1.0 dos variantes de Windows: el instalador original sin firma y una variante identificada como `selfsigned`, firmada por un certificado autofirmado con sujeto `CN=Innova-tech`.
+La release v0.2.0 de Nemein ofrece un instalador de Windows identificado como selfsigned, firmado con un certificado autofirmado con sujeto CN=Innova-tech. La release v0.1.0 conserva sus dos variantes originales: sin firma y autofirmada.
 
 El certificado fue emitido por el propio editor. No acredita una verificación de identidad por una autoridad certificadora ni otorga confianza pública automática. Windows puede mantener el aviso de editor no reconocido o de SmartScreen. La descarga incluye el certificado público y checksums propios para esa variante.
 

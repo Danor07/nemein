@@ -2,16 +2,20 @@
 
 Nemein toma su nombre de la idea de asignar y distribuir: darle un destino al dinero que ya tenés. Un software de finanzas personales enfocado en workflows.
 
-Primera versión pública experimental. Código abierto bajo licencia MIT. Presupuesto base cero en guaraníes, con acceso para agentes mediante CLI y MCP.
+Versión experimental. Código abierto bajo licencia MIT. Presupuesto base cero en guaraníes, con acceso para agentes mediante CLI y MCP.
 
 Aplicación de presupuesto base cero en guaraníes enteros. Interfaz de escritorio Tauri 2, servidor Express con páginas EJS, SQLite mediante better-sqlite3 y gráficos Chart.js locales. Sin usuarios, telemetría, credenciales bancarias ni sincronización bancaria.
 
 
 ## Descargar para Windows
 
-La primera versión pública experimental está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.1.0). Descargá el instalador para Windows x64; incluye Node.js y sus dependencias. Requiere WebView2. El instalador original no tiene firma. También se ofrece una variante `selfsigned`, firmada con un certificado autofirmado de Innova-tech; Windows no confía en él automáticamente. Ver [firma de código](SIGNING.md).
+La versión 0.2.0 está en [GitHub Releases](https://github.com/Danor07/nemein/releases/tag/v0.2.0). Descargá Nemein-0.2.0-windows-x64-selfsigned-setup.exe para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
 
-Los archivos de la release incluyen `SHA256SUMS.txt` para verificar la integridad. El instalador y el código fuente no contienen bases de datos ni configuración personal.
+El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mantener advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
+
+SHA256SUMS.txt permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales. La release v0.1.0 conserva sus descargas originales.
+
+**Al actualizar desde 0.1.0:** creá una conexión en Permisos y propuestas, elegí sus acciones y reenlazá tu cliente MCP/CLI con el nuevo token. Los interruptores antiguos de lectura/escritura ya no conceden acceso. Conservá un backup antes de actualizar.
 
 ## Abrir y desarrollar
 
@@ -123,7 +127,7 @@ Para trabajar sin el equipo principal, proposal-create recibe {action,args,base,
 
 MCP incluye permisos_conexion, ejecutar_accion, estado_propuesta y entregar_propuesta. Los nombres anteriores siguen disponibles bajo sus permisos; las escrituras no devuelven implícitamente un snapshot que no haya sido autorizado.
 
-El detalle de contratos, conflictos, reintentos, límites y recuperación está en [Permisos y propuestas](wiki/Modulos/Permisos-y-propuestas.md). Los tokens y los archivos de propuestas son privados. Estas reglas no aíslan programas que ya tienen acceso a los archivos del mismo usuario de Windows.
+El detalle de contratos, conflictos, reintentos, límites y recuperación está en [Permisos y propuestas](docs/permisos-y-propuestas.md). Los tokens y los archivos de propuestas son privados. Estas reglas no aíslan programas que ya tienen acceso a los archivos del mismo usuario de Windows.
 
 
 ## Validación
@@ -163,6 +167,10 @@ Comandos nuevos: overview, search, goals, goal-set, goal-remove, recurring, recu
 
 No se ejecutan pagos bancarios ni se registran recurrentes automáticamente. Registrar un vencimiento crea un movimiento local y avanza la fecha. Un reintento del mismo vencimiento devuelve error sin duplicar.
 
+## Contribuir
+
+Preparación del entorno, estructura del código y criterios para cambios: [CONTRIBUTING.md](CONTRIBUTING.md). La documentación de contratos está en docs/.
+
 ## Licencia
 
 MIT. Ver [LICENSE](LICENSE). Las dependencias mantienen sus respectivas licencias.
@@ -180,7 +188,7 @@ Concedé event-snapshot y events a tu conexión y configurá su token antes de e
 
 Guardá el snapshot junto con su cursor. Persistí el cursor después de procesar cada evento y deduplicá por source + id. watch vuelve a comprobar permisos en cada página. Para seguimiento continuo se requiere permitir; una consulta en preguntar se revisa desde la bandeja. Se admiten NDJSON y JSON-seq; no se agregan transportes HTTP.
 
-Contratos y límites: [Eventos](wiki/Modulos/Eventos.md).
+Contratos y límites: [Eventos](docs/eventos.md).
 
 ## Rutas estables para MCP
 
