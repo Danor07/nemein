@@ -38,7 +38,8 @@ function fixture(t) {
   return { dir, b, readers };
 }
 const document = (b) => JSON.parse(b.exportData().content);
-const coded = (code) => (e) => e.code === code;
+const coded = (code) => (e) =>
+  e.code === code && typeof e.message === "string" && e.message.length > 0;
 test("JSON export preserves the ledger and planning, whitelists data and stays read-only", (t) => {
   const { b } = fixture(t);
   const a = b.createAccount({
@@ -429,5 +430,53 @@ test("offline proposal schema stays aligned with every reviewable catalog action
       .filter(([, spec]) => spec.write)
       .map(([name]) => name)
       .sort(),
+  );
+});
+
+test("JSON validates every financial table and both formats validate their metadata", (t) => {
+  const { b } = fixture(t);
+  for (const name of ["", "x".repeat(161)]) {
+    b.db.prepare("UPDATE groups_ SET name=? WHERE id=1").run(name);
+    assert.throws(() => b.exportData(), coded("EXPORT_INVALID_VALUE"));
+  }
+  b.db.prepare("UPDATE groups_ SET name='Restored' WHERE id=1").run();
+  for (const format of ["json", "csv"])
+    assert.throws(
+      () => exportData(b.db, { source: "", cursor: "" }, { format }),
+      coded("EXPORT_INVALID_VALUE"),
+    );
+});
+test("the row budget bounds materialization across multiple tables", (t) => {
+  const { b } = fixture(t);
+  const group = b.db.prepare("INSERT INTO groups_(name) VALUES (?)"),
+    category = b.db.prepare(
+      "INSERT INTO categories(group_id,name) VALUES (1,?)",
+    );
+  b.db.transaction(() => {
+    for (let i = 0; i < 19990; i++) group.run("Budget " + i);
+    for (let i = 0; i < 10000; i++) category.run("Category " + i);
+  })();
+  const original = b.db.prepare;
+  let materialized = 0;
+  b.db.prepare = function (sql) {
+    const statement = original.call(this, sql);
+    if (sql.startsWith("SELECT ") && sql.includes(" LIMIT ?")) {
+      const all = statement.all;
+      statement.all = function (...args) {
+        const rows = all.apply(this, args);
+        materialized += rows.length;
+        return rows;
+      };
+    }
+    return statement;
+  };
+  try {
+    assert.throws(() => b.exportData(), coded("EXPORT_TOO_LARGE"));
+  } finally {
+    b.db.prepare = original;
+  }
+  assert.ok(
+    materialized <= 20001,
+    "Do not materialize an unbounded surplus after the row budget is exhausted",
   );
 });

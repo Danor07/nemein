@@ -3,7 +3,7 @@ export default {
   testRunner: "command",
   commandRunner: {
     command:
-      "node --test test/exports.test.js test/event-reads.test.js test/properties/export.property.test.js test/fuzz/export.test.js",
+      "node --test test/exports.test.js test/event-reads.test.js test/properties/export.property.test.js test/properties/cursor.property.test.js test/fuzz/export.test.js",
   },
   coverageAnalysis: "off",
   concurrency: 2,
@@ -19,6 +19,7 @@ export default {
     "!test/exports.test.js",
     "!test/event-reads.test.js",
     "!test/properties/export.property.test.js",
+    "!test/properties/cursor.property.test.js",
     "!test/fuzz/export.test.js",
     "!package.json",
   ],
