@@ -1,6 +1,6 @@
 [package]
 name = "nemein"
-version = "0.2.2"
+version = "0.3.0"
 description = "Presupuesto personal local en guaraníes"
 authors = ["Nemein"]
 edition = "2021"

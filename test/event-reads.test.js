@@ -20,7 +20,8 @@ function fixture(t) {
   return { dir, open };
 }
 const group = (b, name) => b.createGroup({ name });
-const coded = (code) => (e) => e.code === code;
+const coded = (code) => (e) =>
+  e.code === code && typeof e.message === "string" && e.message.length > 0;
 
 test("cursor: empty baseline, bounded pages, per-event resume, and reopen", (t) => {
   const f = fixture(t),
@@ -214,4 +215,27 @@ test("event reads do not generate events, mutate ledger or change existing snaps
     assert.equal(b.readEvents({ after: cut.cursor }).events.length, 0);
   }
   assert.equal(b.db.prepare("SELECT COUNT(*) n FROM budget_events").get().n, 0);
+});
+
+test("zero-position cursors isolate budgets, exact maximum pages work, and missing anchors fail explicitly", (t) => {
+  const f = fixture(t),
+    b = f.open(),
+    other = f.open();
+  const foreign = fixture(t).open();
+  const baseline = b.eventSnapshot().cursor;
+  assert.throws(
+    () => foreign.readEvents({ after: baseline }),
+    coded("CURSOR_MISMATCH"),
+  );
+  assert.equal(b.readEvents({ after: baseline, limit: 1000 }).events.length, 0);
+  group(b, "First");
+  group(b, "Anchor");
+  const anchor = b.eventSnapshot().cursor;
+  group(b, "Tail");
+  b.db.prepare("DELETE FROM budget_events WHERE sequence=2").run();
+  assert.throws(
+    () => b.readEvents({ after: anchor }),
+    coded("CURSOR_MISMATCH"),
+  );
+  assert.equal(other.eventSnapshot().cursor, b.eventSnapshot().cursor);
 });

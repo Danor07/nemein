@@ -39,7 +39,9 @@ jobs:
         if: always()
         with:
           name: mutation-report
-          path: reports/mutation/
+          path: |
+            reports/mutation/
+            reports/export-mutation/
           if-no-files-found: ignore
           retention-days: 14
 

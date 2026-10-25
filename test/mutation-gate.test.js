@@ -92,3 +92,40 @@ test("mutation gate CLI enforces the same pass/fail contract", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("mutation gate validates the selected report and never substitutes the default", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-selected-report-"));
+  try {
+    mkdirSync(path.join(dir, "reports", "mutation"), { recursive: true });
+    writeFileSync(
+      path.join(dir, "reports", "mutation", "mutation.json"),
+      JSON.stringify(report(Array(10).fill("Survived"))),
+    );
+    const chosen = path.join(dir, "chosen.json"),
+      script = fileURLToPath(
+        new URL("../scripts/mutation-gate.js", import.meta.url),
+      );
+    writeFileSync(chosen, JSON.stringify(report(Array(10).fill("Killed"))));
+    let child = spawnSync(process.execPath, [script, chosen], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    assert.equal(child.status, 0, child.stderr);
+    assert.equal(child.stdout.trim(), "Mutation gate: 100.00%");
+    child = spawnSync(
+      process.execPath,
+      [script, path.join(dir, "missing.json")],
+      { cwd: dir, encoding: "utf8" },
+    );
+    assert.notEqual(child.status, 0);
+    writeFileSync(chosen, JSON.stringify(report(["Killed", "Timeout"])));
+    child = spawnSync(process.execPath, [script, chosen], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    assert.notEqual(child.status, 0);
+    assert.match(child.stderr, /contains timeouts/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

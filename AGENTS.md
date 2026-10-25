@@ -6,6 +6,7 @@ Aplicación local de presupuesto personal en guaraníes enteros. Datos reales en
 - CLI y MCP usan BUDGET_AGENT_TOKEN_FILE y BUDGET_AGENT_VERSION (1 por defecto). BUDGET_MCP_WRITE y BUDGET_EVENTS_READ ya no autorizan nada.
 - CLI: nemein.cmd help. Cada comando acepta JSON, --file o --stdin; stdout JSON, errores en stderr con code y salida no cero.
 - Consultar permisos propios con permissions o permisos_conexion (MCP). El catálogo de herramientas no implica autorización.
+- export {format: "json"|"csv"} devuelve metadatos y content; no escribe archivos. Requiere export por separado, no hereda snapshot/backup. JSON financiero sin credenciales ni auditoría; CSV literal para intercambio. Consultar docs/exportaciones.md.
 - snapshot, overview, search, goals, recurring, reports y cube mantienen las validaciones del dominio. Importes enteros; cube permite entre una y tres dimensiones month/day/account/category/payee, con fechas from/to.
 - Para solicitudes revisables usar _purpose, _base (cursor del snapshot) y _request_id único; en ejecutar_accion de MCP se llaman purpose, base y request_id.
 - Si el resultado es pending, no repetir la mutación: consultar proposal-status {id} o estado_propuesta. Sólo el propietario resuelve desde la bandeja.

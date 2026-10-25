@@ -15,7 +15,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   console.log(
     "Mutation gate: " +
       mutationGate(
-        JSON.parse(fs.readFileSync("reports/mutation/mutation.json", "utf8")),
+        JSON.parse(
+          fs.readFileSync(
+            process.argv[2] ?? "reports/mutation/mutation.json",
+            "utf8",
+          ),
+        ),
       ).toFixed(2) +
       "%",
   );

@@ -54,7 +54,7 @@ try {
     readFileSync(path.join(runtime, "package.json"), "utf8"),
   ).version;
   assert.equal(client.getServerVersion().version, version);
-  assert.equal((await client.listTools()).tools.length, 22);
+  assert.equal((await client.listTools()).tools.length, 23);
   const call = () =>
     client.callTool({ name: "presupuesto", arguments: { month: "2026-10" } });
   let response = await call();
@@ -74,6 +74,28 @@ try {
   });
   response = await call();
   assert.equal(JSON.parse(response.content[0].text).code, "PERMISSION_DENIED");
+  const deniedExport = await client.callTool({
+    name: "exportar_presupuesto",
+    arguments: { format: "json" },
+  });
+  assert.equal(
+    JSON.parse(deniedExport.content[0].text).code,
+    "PERMISSION_DENIED",
+  );
+  budget.setRule({
+    connection_id: connection.id,
+    action: "export",
+    decision: "allow",
+  });
+  const exported = await client.callTool({
+    name: "exportar_presupuesto",
+    arguments: { format: "json" },
+  });
+  assert.equal(exported.isError, undefined);
+  assert.equal(
+    JSON.parse(JSON.parse(exported.content[0].text).content).currency,
+    "PYG",
+  );
   for (const folder of ["src", "public", "views"])
     for (const file of readdirSync(folder, { recursive: true })) {
       const source = path.join(folder, file);
@@ -87,7 +109,7 @@ try {
   console.log(
     "INSTALLED MCP OK: " +
       version +
-      ", 22 tools, private credential, default deny, explicit read, live denial, installed application matches checkout.",
+      ", 23 tools, private credential, default deny, explicit read, live denial, installed application matches checkout.",
   );
 } finally {
   await client.close();

@@ -47,3 +47,9 @@ El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo
 Las herramientas whoami.exe e icacls.exe se resuelven en SystemRoot/System32, independientemente del PATH o de Git Bash. El evaluador puro niega fallbacks distintos de ask/deny, incluso si una regla antigua evitó la validación de guardado; lo cubren propiedades y una regresión por el llamador real.
 
 El botón MCP anuncia preparación, evita envíos duplicados, conserva el ancho entre estados y permite reintentar un error persistente. Una respuesta HTTP correcta sólo confirma que el archivo fue preparado y que se solicitó guardarlo; no se afirma que el navegador lo escribió en disco. Se conserva la alternativa de ver/copiar y se prueban submit, errores HTTP y de red.
+
+## Exportaciones P9a
+
+Un segundo alcance de Stryker cubre src/export.js y src/event-reads.js con sus propiedades, fuzzing, límites y lectura concurrente. Mantiene mínimo 90 % y rechazo de timeouts/errores. Los dos alcances deben aprobar por separado; se conservan reportes en reports/mutation y reports/export-mutation. El gate acepta una ruta explícita de reporte y prueba que no la sustituye por el predeterminado. Los esquemas de exportación y propuestas se compilan con Ajv en modo estricto.
+
+Evidencia P9a en 5eb7ca7: CI 40200682149 aprobado, Windows 112/112 y Linux con mutación 97,42 % (340/349) y 95,30 % (466/489), sin timeouts ni errores. El gate local completo también aprueba; conserva sus reportes separados de los del runner. Ver [validación actual](../VALIDACION.md) y [notas de 0.3.0](releases/0.3.0.md).

@@ -8,17 +8,24 @@ Versión experimental. Código abierto bajo licencia MIT.
 
 ## Descargar e instalar en Windows
 
-Descargá la versión más reciente desde [GitHub Releases](https://github.com/Danor07/nemein/releases): el archivo `Nemein-VERSIÓN-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
+Descargá [Nemein 0.3.0](https://github.com/Danor07/nemein/releases/tag/v0.3.0): el archivo `Nemein-0.3.0-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
 
 - **Instalá con doble clic desde el Explorador.** Si el instalador se abre desde una terminal de una app empaquetada (MSIX), como Codex, Windows lo instala dentro de la carpeta privada de esa app: el acceso del menú Inicio no funciona y la desinstalación no aparece en el sistema.
 - El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mostrar advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
 - `SHA256SUMS.txt` permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales.
 
+### Novedades de 0.3.0
+
+- Exportación financiera JSON/CSV por CLI y MCP, con permiso propio y cursor consistente para continuar con eventos.
+- Configuración MCP sin token visible, credencial privada, permisos que se niegan ante reglas inválidas y rutas de instalación verificadas.
+- Migraciones numeradas que conservan bases anteriores y validación de instalador/MCP en Windows limpio, además de propiedades, fuzzing y mutación.
+
 ### Actualizar
 
 Antes de actualizar, guardá una copia de la carpeta de datos (ver [Dónde están tus datos](#dónde-están-tus-datos)). Las migraciones son numeradas y transaccionales, y conservan los datos de las bases anteriores ([migraciones](docs/migraciones.md)).
 
-- **Desde 0.2.1 o anterior a 0.2.2:** la configuración MCP ya no contiene el token, sino la ruta a una credencial privada. Renová la conexión en **Permisos y propuestas** y volvé a enlazar tu cliente. Además, 0.2.2 rechaza instalaciones dentro de MSIX y corrige el rechazo de formularios con «Origen no permitido».
+- **Desde 0.2.1 o anterior:** la configuración MCP ya no contiene el token, sino la ruta a una credencial privada. Renová la conexión en **Permisos y propuestas** y volvé a enlazar tu cliente. El generador de configuración MCP rechaza rutas dentro de MSIX; también se corrige el rechazo de formularios con «Origen no permitido».
+- **Desde 0.2.2:** las conexiones siguen siendo compatibles. La nueva acción export empieza negada; habilitala expresamente si querés exportar datos.
 - **Desde 0.1.0:** las conexiones comienzan sin permisos. Creá una conexión, elegí sus acciones y enlazá tu cliente MCP/CLI. `BUDGET_MCP_WRITE` y `BUDGET_EVENTS_READ` ya no conceden acceso.
 
 Qué cambió en cada versión: en las notas de cada [release](https://github.com/Danor07/nemein/releases).
@@ -117,6 +124,10 @@ Snapshot consistente, lectura paginada y seguimiento por terminal. Concedé even
 Guardá el snapshot junto con su cursor. Persistí el cursor después de procesar cada evento y deduplicá por source + id. watch vuelve a comprobar permisos en cada página. Para seguimiento continuo se requiere permitir; una consulta en preguntar se revisa desde la bandeja. Se admiten NDJSON y JSON-seq; no se agregan transportes HTTP.
 
 Contratos y límites: [Eventos](docs/eventos.md).
+
+### Exportación financiera para otros workflows
+
+La acción export y la herramienta MCP exportar_presupuesto preparan JSON financiero o CSV de movimientos en UTF-8, con cursor consistente y permiso propio, negado por defecto. El JSON excluye credenciales, permisos y auditoría; no reemplaza un respaldo SQLite. La respuesta contiene content para que el cliente lo guarde, hasta 20.000 filas o 5 MB. El CSV conserva texto literal: en una planilla, importá los campos textuales como texto. [Formato, límites y ejemplos](docs/exportaciones.md).
 
 ## Dónde están tus datos
 
