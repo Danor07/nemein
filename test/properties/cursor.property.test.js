@@ -70,7 +70,7 @@ test("PBT: cursor validity covers every field, exact keys and canonical encoding
   assert.equal(token.length, 1024);
   assert.deepEqual(decodeCursor(token), boundary);
   invalid(encode({ ...boundary, source: boundary.source + "x" }));
-  let padded = { ...position };
+  const padded = { ...position };
   while (Buffer.byteLength(JSON.stringify(padded)) % 3 !== 1)
     padded.source += "x";
   const canonical = encode(padded),
