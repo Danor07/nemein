@@ -48,7 +48,8 @@
         "transaction-delete",
         "import-preview",
         "import-mapping",
-        "account-transactions"
+        "account-transactions",
+        "export"
       ]
     },
     "args": {
@@ -93,9 +94,12 @@
         }
       },
       "then": {
-        "required": [
-          "base"
-        ]
+        "required": ["base"],
+        "properties": {
+          "base": {
+            "$ref": "#/properties/base"
+          }
+        }
       }
     }
   ]

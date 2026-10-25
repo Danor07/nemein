@@ -42,6 +42,11 @@ const month = { month: z.string().optional() };
 const id = z.number().int().positive(),
   amount = z.number().int();
 const descriptors = [
+  [
+    "exportar_presupuesto",
+    "export",
+    { format: z.enum(["json", "csv"]).optional() },
+  ],
   ["presupuesto", "snapshot", month],
   ["reportes", "reports", month],
   ["resumen", "overview", month],

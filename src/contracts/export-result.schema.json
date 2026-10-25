@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nemein:schema:export-result:1",
+  "title": "Nemein export result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "source",
+    "cursor",
+    "exported_at",
+    "currency",
+    "amount_unit",
+    "format",
+    "media_type",
+    "filename",
+    "row_count",
+    "content"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "cursor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "exported_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "currency": {
+      "const": "PYG"
+    },
+    "amount_unit": {
+      "const": "integer"
+    },
+    "format": {
+      "enum": ["json", "csv"]
+    },
+    "media_type": {
+      "type": "string"
+    },
+    "filename": {
+      "type": "string"
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20000
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 5000000
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "format": {
+          "const": "json"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "filename": {
+          "const": "nemein-budget-v1.json"
+        }
+      }
+    },
+    {
+      "properties": {
+        "format": {
+          "const": "csv"
+        },
+        "media_type": {
+          "const": "text/csv;charset=utf-8;header=present"
+        },
+        "filename": {
+          "const": "nemein-transactions-v1.csv"
+        }
+      }
+    }
+  ]
+}

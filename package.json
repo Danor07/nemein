@@ -15,11 +15,12 @@
     "test:unit": "node --test test/*.test.js",
     "test:pbt": "node --test test/properties/*.property.test.js",
     "test:fuzz": "node --test test/fuzz/*.test.js",
-    "test:mutation": "stryker run stryker.config.mjs && node scripts/mutation-gate.js",
+    "test:mutation": "stryker run stryker.export.config.mjs && node scripts/mutation-gate.js reports/export-mutation/mutation.json && stryker run stryker.config.mjs && node scripts/mutation-gate.js",
     "quality": "npm run lint && npm run test:unit && npm run test:pbt && npm run test:fuzz && npm run test:mutation"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "ajv": "8.20.0",
     "better-sqlite3": "^12.4.1",
     "chart.js": "^4.5.0",
     "csv-parse": "7.0.3",

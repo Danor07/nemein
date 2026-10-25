@@ -118,6 +118,10 @@ Guardá el snapshot junto con su cursor. Persistí el cursor después de procesa
 
 Contratos y límites: [Eventos](docs/eventos.md).
 
+### Exportación financiera para otros workflows (en desarrollo)
+
+La acción export y la herramienta MCP exportar_presupuesto preparan JSON financiero o CSV de movimientos en UTF-8, con cursor consistente y permiso propio, negado por defecto. El JSON excluye credenciales, permisos y auditoría; no reemplaza un respaldo SQLite. [Formato, límites y ejemplos](docs/exportaciones.md).
+
 ## Dónde están tus datos
 
 En Windows, por defecto:

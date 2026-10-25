@@ -1,3 +1,4 @@
+import { exportData } from "./export.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 export const reviewedReadContext = new AsyncLocalStorage();
 import { Buffer } from "node:buffer";
@@ -88,6 +89,16 @@ export function attachEventReads(budget) {
         goals: budget.listGoals(snapshot.month),
         recurring: budget.listRecurring(),
       };
+    });
+
+  budget.exportData = (options) =>
+    readTransaction(() => {
+      const position = head();
+      return exportData(
+        db,
+        { source: position.source, cursor: encode(position) },
+        options,
+      );
     });
 
   budget.readEvents = ({ after, limit = 100 } = {}) => {

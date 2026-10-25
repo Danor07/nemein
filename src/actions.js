@@ -1,4 +1,8 @@
 export const actions = Object.freeze({
+  export: {
+    method: "exportData",
+    label: "Exportar datos financieros completos",
+  },
   snapshot: {
     method: "snapshot",
     label: "Consultar presupuesto y movimientos",
