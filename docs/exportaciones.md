@@ -1,6 +1,6 @@
 # Exportaciones financieras para workflows
 
-Implementación P9a, todavía sin release propia. CLI y MCP comparten la acción `export` y sus validaciones. No se agregan endpoints HTTP ni sincronización automática.
+Disponible desde Nemein 0.3.0. CLI y MCP comparten la acción `export` y sus validaciones. No se agregan endpoints HTTP ni sincronización automática.
 
 ## Permiso y alcance
 

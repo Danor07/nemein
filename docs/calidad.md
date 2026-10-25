@@ -51,3 +51,5 @@ El botón MCP anuncia preparación, evita envíos duplicados, conserva el ancho 
 ## Exportaciones P9a
 
 Un segundo alcance de Stryker cubre src/export.js y src/event-reads.js con sus propiedades, fuzzing, límites y lectura concurrente. Mantiene mínimo 90 % y rechazo de timeouts/errores. Los dos alcances deben aprobar por separado; se conservan reportes en reports/mutation y reports/export-mutation. El gate acepta una ruta explícita de reporte y prueba que no la sustituye por el predeterminado. Los esquemas de exportación y propuestas se compilan con Ajv en modo estricto.
+
+Evidencia P9a en 5eb7ca7: CI 40200682149 aprobado, Windows 112/112 y Linux con mutación 97,42 % (340/349) y 95,30 % (466/489), sin timeouts ni errores. El gate local completo también aprueba; conserva sus reportes separados de los del runner. Ver [validación actual](../VALIDACION.md) y [notas de 0.3.0](releases/0.3.0.md).

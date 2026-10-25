@@ -1,3 +1,16 @@
+# Verificación actual — v0.3.0 (25/10/2026)
+
+- Código de exportaciones y lecturas en 5eb7ca7: [CI 40200682149 aprobado](https://github.com/Danor07/nemein/actions/runs/40200682149). Windows 112/112, credenciales instaladas 7/7, NSIS silencioso, registro, acceso de Inicio, MCP con 23 herramientas, exportación y arranque nativo.
+- Linux aislado: regresión 99/100 (omisión de ACL Windows), ocho propiedades y cuatro pruebas de fuzzing. Mutación exportaciones/lecturas 340/349 (97,42 %) y controles anteriores 466/489 (95,30 %); sin timeouts, errores ni casos sin cobertura.
+- Gate local npm run quality aprobado: lint sin advertencias, 111/112 pruebas (omisión por privilegio de symlink), mutación 97,42 % y 95,09 %, sin timeouts ni errores. La primera medición P9a de 83,67 % se rechazó y se reforzaron las pruebas sin bajar umbrales ni excluir invariantes.
+- Versiones de aplicación, runtime y Cargo actualizadas a 0.3.0; regresión local repetida: 111/112, sin fallos. El esquema SQL permanece en 5 y las migraciones publicadas no cambian.
+- No se modifican presupuestos personales, ni se ejecuta el instalador desde Codex/MSIX. Las afirmaciones históricas de instalación desde ese contexto no equivalen a una instalación normal de Windows; las comprobaciones actuales de instalación limpia pertenecen al runner efímero.
+- Paquete 0.3.0: runtime de producción comprobado con Node incluido, CLI y MCP reales: 23 herramientas, permiso export negado por defecto, JSON/CSV, conservación de importes ficticios, credencial privada y revocación. Archivos de aplicación comparados con el checkout; sin bases, secretos ni herramientas de desarrollo.
+- Ejecutable nativo 0.3.0 recompilado con rutas personales remapeadas y firmado con sello de tiempo. Arranque con presupuesto temporal: HTTP 200, Chart.js local y cierre del motor comprobados.
+- La inspección visual general al 200 % y el staging manual completo siguen pendientes. La release conserva su carácter experimental.
+
+El registro siguiente es histórico: cada cifra y limitación corresponde a la etapa indicada.
+
 # Verificación — mejoras del 23/10/2026
 
 - Suite completa: 13 pruebas aprobadas, 0 fallos.
