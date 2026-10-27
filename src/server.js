@@ -108,6 +108,12 @@ export function createApp(budget, { installationRoots } = {}) {
     "Gs. " +
     new Intl.NumberFormat("es-PY", { maximumFractionDigits: 0 }).format(n);
   app.locals.displayDate = (d) => d.split("-").reverse().join("/");
+  // Stored instants are UTC; show them in this computer's time zone and regional format.
+  app.locals.displayTime = (iso) =>
+    new Date(iso).toLocaleString(undefined, {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
   app.locals.today = today;
   app.locals.csrf = csrf;
   const render = (req, res, extra = {}) => {

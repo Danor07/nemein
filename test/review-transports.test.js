@@ -100,7 +100,8 @@ test("review window escapes AI text, shows evidence, and marks only on explicit 
       "<script>alert(1)</script> https://evil.example [link](https://evil.example)",
     generator: "<b>model</b>",
   });
-  const server = createApp(b).listen(0, "127.0.0.1");
+  const app = createApp(b),
+    server = app.listen(0, "127.0.0.1");
   await new Promise((r) => server.once("listening", r));
   try {
     const base = "http://127.0.0.1:" + server.address().port;
@@ -134,6 +135,12 @@ test("review window escapes AI text, shows evidence, and marks only on explicit 
     const list = await (await fetch(base + "/?view=reviews")).text();
     assert.match(list, /Historial/);
     assert.match(list, /Revisado/);
+    // Stored UTC instants follow this computer's zone and format, never raw ISO.
+    const { created_at } = b.getReview({ id: "hostile" });
+    assert.equal(list.includes(created_at), false);
+    assert.ok(
+      list.includes(app.locals.displayTime(created_at) + " · &lt;b&gt;model"),
+    );
     const created = await fetch(base + "/action/review-create", {
       method: "POST",
       headers: {

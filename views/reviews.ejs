@@ -2,9 +2,9 @@
 <% if(reviewDetail){ const r=reviewDetail, p=r.package; %>
 <p><a href="/?view=reviews">← Todas las revisiones</a></p>
 <section class="panel"><h2>Revisión del <%= displayDate(p.period.from) %> al <%= displayDate(p.period.to) %></h2>
-<p>Corte: <%= displayDate(p.as_of) %> · <%= p.time_zone %>. Guardado: <%= r.created_at %>.</p>
+<p>Corte: <%= displayDate(p.as_of) %> · <%= p.time_zone %>. Guardado: <%= displayTime(r.created_at) %>.</p>
 <p>Redacción declarada: <%= r.generator %>. Guardado por: <%= r.generated_by %>.</p>
-<p><strong><%= r.reviewed_at ? 'Revisado por vos el '+r.reviewed_at : 'Pendiente de tu revisión' %></strong>. Abrir este informe no lo marca como revisado.</p>
+<p><strong><%= r.reviewed_at ? 'Revisado por vos el '+displayTime(r.reviewed_at) : 'Pendiente de tu revisión' %></strong>. Abrir este informe no lo marca como revisado.</p>
 <p>Este informe conserva su corte; los movimientos posteriores no actualizan sus cifras. Cobertura de extractos no declarada.</p>
 <h3>Importes registrados</h3><p>Por presupuestar: <strong><%= gs(p.recorded.ready) %></strong>. Incluye la reserva de asignaciones futuras.</p>
 <p>Ingresos del período: <%= gs(p.recorded.metrics.income) %> · Gastos netos de reintegros: <%= gs(p.recorded.metrics.spending) %>.</p>
@@ -20,7 +20,7 @@
 </section>
 <% }else{ %>
 <section class="panel"><h2>Guardar un paquete sin IA</h2><p>Podés revisar los datos aunque tu IA no esté disponible.</p><form method="post" action="/action/review-create" class="form-grid"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="reviews"><label>Desde<input type="date" name="from" value="<%= today().slice(0,7)+'-01' %>" required></label><label>Hasta<input type="date" name="to" value="<%= today() %>" required></label><label>Corte de saldos<input type="date" name="as_of" value="<%= today() %>" max="<%= today() %>" required></label><div class="form-submit"><button>Guardar paquete</button></div></form></section>
-<section class="panel spaced"><h2>Historial</h2><p><%= reviewList.total %> revisiones. Sólo vos podés marcarlas como revisadas.</p><ul><% for(const r of reviewList.items){ %><li><a href="/?view=reviews&review=<%= encodeURIComponent(r.id) %>"><%= r.created_at %> · <%= r.generator %></a> · <%= r.reviewed_at?'Revisado':'Pendiente' %></li><% } %></ul>
+<section class="panel spaced"><h2>Historial</h2><p><%= reviewList.total %> revisiones. Sólo vos podés marcarlas como revisadas.</p><ul><% for(const r of reviewList.items){ %><li><a href="/?view=reviews&review=<%= encodeURIComponent(r.id) %>"><%= displayTime(r.created_at) %> · <%= r.generator %></a> · <%= r.reviewed_at?'Revisado':'Pendiente' %></li><% } %></ul>
 <% if(reviewList.offset>0){ %><a href="/?view=reviews&offset=<%= Math.max(0,reviewList.offset-50) %>">Anteriores</a><% } %>
 <% if(reviewList.offset+50<reviewList.total){ %><a href="/?view=reviews&offset=<%= reviewList.offset+50 %>">Siguientes</a><% } %>
 </section><% } %>
