@@ -78,17 +78,38 @@ test("external backup preserves WAL data, separates identities and never replace
 test("window daily backups stay local even with an absent external destination", async (t) => {
   const { root, b } = fixture(t);
   const previous = process.env.BUDGET_BACKUP_DIR;
-  process.env.BUDGET_BACKUP_DIR = path.join(root, "disconnected");
   t.after(() => {
     if (previous === undefined) delete process.env.BUDGET_BACKUP_DIR;
     else process.env.BUDGET_BACKUP_DIR = previous;
   });
-  const file = await b.dailyBackup();
+  delete process.env.BUDGET_BACKUP_DIR;
+  const file = await b.backup();
+  process.env.BUDGET_BACKUP_DIR = path.join(root, "disconnected");
   assert.equal(path.dirname(file), path.join(b.dir, "backups"));
   assert.equal(await b.dailyBackup(), file);
   assert.equal(readdirSync(path.join(b.dir, "backups")).length, 1);
   await assert.rejects(b.backup());
   assert.equal(existsSync(process.env.BUDGET_BACKUP_DIR), false);
+});
+test("external backup folders come only from an absolute path and a canonical identity", async (t) => {
+  const { root, b } = fixture(t);
+  for (const value of [null, 3, "", "relative"])
+    await assert.rejects(externalBackup(b.db, value), {
+      message: "BUDGET_BACKUP_DIR debe ser una carpeta absoluta existente.",
+    });
+  const hex = "a".repeat(36);
+  for (const source of [
+    "aaaaurn:uuid:" + "a".repeat(32),
+    "urn:uuid:../" + hex,
+    "urn:uuid:" + hex + "/../x",
+  ]) {
+    const fake = {
+      prepare: () => ({ get: () => ({ source }) }),
+      backup: async (file) => writeFileSync(file, "copy"),
+    };
+    await assert.rejects(externalBackup(fake, root), /Identidad/);
+  }
+  assert.deepEqual(readdirSync(root), ["data"]);
 });
 test("external backup rejects missing/non-directory destinations and cleans incomplete files", async (t) => {
   const { root, b } = fixture(t);

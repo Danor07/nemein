@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { openBudget } from "../src/core.js";
-import { maxReviewTextBytes } from "../src/reviews.js";
+import { openBudget, today } from "../src/core.js";
+import { maxReviewTextBytes, maxReviewPackageBytes } from "../src/reviews.js";
 import { eventOperations } from "../src/events.js";
 import { actions } from "../src/actions.js";
 
@@ -181,6 +181,15 @@ test("review permissions are independent, owner guard holds and approved proposa
   );
   b.resolveProposal({ id: pending.proposal_id, decision: "accept" });
   assert.equal(b.getReview({ id: "asked" }).generated_by, c.id);
+  // Accepting runs the action internally; its nested reads are not separate owner actions.
+  assert.equal(
+    b.db
+      .prepare(
+        "SELECT COUNT(*) n FROM agent_audit WHERE actor='owner' AND action IN ('cube','recurring')",
+      )
+      .get().n,
+    0,
+  );
   b.setRule({ connection_id: c.id, action: "review-save", decision: "allow" });
   const hostile = { ...p, id: "guard" };
   Object.defineProperty(hostile, "report", {
@@ -262,4 +271,166 @@ test("review package and cursor share a read snapshot under a concurrent write",
   } finally {
     other.close();
   }
+});
+const rejects = (fn, code, message) => assert.throws(fn, { code, message });
+test("review validation reports exact codes and messages at every boundary", (t) => {
+  const b = fixture(t),
+    p = save(b);
+  assert.equal(p.package.unit, "integer");
+  assert.throws(() => b.snapshot("2026-13"));
+  const period =
+    "El período debe terminar como máximo en el corte, y el corte no puede ser futuro.";
+  for (const o of [
+    { ...options, from: "2026-01-16" },
+    { ...options, to: "2026-01-16" },
+    { ...options, as_of: "2200-01-01" },
+  ])
+    rejects(() => b.reviewPackage(o), "INVALID_REVIEW_PERIOD", period);
+  const now = today();
+  assert.equal(b.reviewPackage({ from: now, to: now, as_of: now }).as_of, now);
+  for (const id of [5, "bad id", "!ok", "ok!", "a".repeat(101)])
+    rejects(
+      () => b.saveReview({ ...p, id }),
+      "INVALID_REVIEW",
+      "Identificador de revisión inválido.",
+    );
+  const changed = (id, change) => {
+    const copy = structuredClone(p);
+    copy.id = id;
+    change(copy.package);
+    return copy;
+  };
+  for (const value of [null, 5, []])
+    rejects(
+      () => b.saveReview(changed("period", (k) => (k.period = value))),
+      "INVALID_REVIEW",
+      "Opciones de revisión inválidas.",
+    );
+  rejects(
+    () => b.saveReview(changed("unsafe", (k) => (k.recorded.ready = 0.5))),
+    "REVIEW_UNSAFE_NUMBER",
+    "Un importe o contador no puede representarse exactamente.",
+  );
+  const sized = (bytes) =>
+    changed("sized", (k) => {
+      k.coverage = "";
+      k.coverage = "x".repeat(bytes - Buffer.byteLength(JSON.stringify(k)));
+    });
+  rejects(
+    () => b.saveReview(sized(maxReviewPackageBytes + 1)),
+    "REVIEW_TOO_LARGE",
+    "El paquete supera 2 MB. Elegí un período menor.",
+  );
+  rejects(
+    () => b.saveReview(sized(maxReviewPackageBytes)),
+    "REVIEW_STALE",
+    "El paquete cambió o no corresponde a este presupuesto. Generá otro y revisá el informe antes de guardar.",
+  );
+  rejects(
+    () => b.saveReview({ ...p, id: "text", report: 5 }),
+    "INVALID_REVIEW_TEXT",
+    "El informe debe ser texto plano de hasta 100000 bytes.",
+  );
+  for (const generator of [5, " ", "g".repeat(161)])
+    rejects(
+      () => b.saveReview({ ...p, id: "generator", generator }),
+      "INVALID_REVIEW_GENERATOR",
+      "Indicá quién redactó el informe, hasta 160 caracteres.",
+    );
+  assert.equal(
+    b.saveReview({ ...p, id: "generator", generator: "g".repeat(160) }).id,
+    "generator",
+  );
+  b.saveReview(p);
+  const reused = "Ese identificador ya pertenece a otro informe.";
+  rejects(
+    () => b.saveReview({ ...p, generator: "Otra IA" }),
+    "REVIEW_ID_REUSED",
+    reused,
+  );
+  const c = b.createConnection({ label: "Other author" });
+  b.setRule({ connection_id: c.id, action: "review-save", decision: "allow" });
+  rejects(() => b.forAgent(c.token).saveReview(p), "REVIEW_ID_REUSED", reused);
+  rejects(
+    () => b.listReviews({ offset: -1 }),
+    "INVALID_REVIEW",
+    "Posición de lista inválida.",
+  );
+  for (const read of [b.getReview, b.markReview])
+    rejects(
+      () => read({ id: "absent" }),
+      "REVIEW_NOT_FOUND",
+      "La revisión no existe.",
+    );
+  assert.deepEqual(b.markReview({ id: p.id }), { id: p.id });
+  assert.deepEqual(
+    b.db
+      .prepare(
+        "SELECT actor,action,decision,reason FROM agent_audit WHERE action='review-mark'",
+      )
+      .all(),
+    [
+      {
+        actor: "owner",
+        action: "review-mark",
+        decision: "allow",
+        reason: "Revisión del propietario",
+      },
+    ],
+  );
+});
+test("review goals and upcoming payments follow their own rows", (t) => {
+  const b = fixture(t),
+    a = b.createAccount({ name: "Cash", type: "efectivo" });
+  b.allocate({ month: "2026-01", category_id: 2, amount: 100 });
+  b.setGoal({ category_id: 2, amount: 1600, due_date: "2027-12-01" });
+  for (const payee of ["Active", "Paused"])
+    b.createRecurring({
+      account_id: a,
+      category_id: 1,
+      payee,
+      amount: -1,
+      next_date: "2026-02-01",
+      frequency: "monthly",
+    });
+  const paused = b.listRecurring().find((r) => r.payee === "Paused");
+  b.toggleRecurring({ id: paused.id, active: false });
+  const p = b.reviewPackage(options),
+    [goal] = p.recorded.goals;
+  assert.equal(
+    goal.name,
+    b.snapshot("2026-01").categories.find((c) => c.id === 2).name,
+  );
+  assert.equal(goal.saved, 100);
+  assert.equal(goal.monthly, 63); // 1500 over 24 months, January 2026 to December 2027.
+  assert.deepEqual(
+    p.projected.upcoming.map((r) => r.payee),
+    ["Active"],
+  );
+});
+test("review package rejects more than 5000 movements or 2 MB before leaving Nemein", (t) => {
+  const b = fixture(t),
+    a = b.createAccount({ name: "Bulk", type: "efectivo" }),
+    insert = b.db.prepare(
+      "INSERT INTO transactions(account_id,date,payee,amount) VALUES (?,?,?,?)",
+    );
+  const add = (n, payee = "Bulk") =>
+    b.db.transaction(() => {
+      for (let i = 0; i < n; i++) insert.run(a, "2026-01-02", payee, -1);
+    })();
+  add(5000);
+  assert.equal(b.reviewPackage(options).evidence.length, 5000);
+  add(1);
+  rejects(
+    () => b.reviewPackage(options),
+    "REVIEW_TOO_LARGE",
+    "El paquete supera 5000 movimientos. Elegí un período menor.",
+  );
+  b.db.exec("DELETE FROM transactions");
+  add(700, "p".repeat(3000));
+  rejects(
+    () => b.reviewPackage(options),
+    "REVIEW_TOO_LARGE",
+    "El paquete supera 2 MB. Elegí un período menor.",
+  );
 });

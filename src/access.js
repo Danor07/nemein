@@ -61,7 +61,10 @@ export function attachAccess(budget) {
     if (context.getStore()?.actor)
       throw error("OWNER_REQUIRED", "Esta acción se administra desde Nemein.");
   };
-  budget.reviewAuthor = () => context.getStore()?.actor?.id || context.getStore()?.reviewActor || "owner";
+  budget.reviewAuthor = () => {
+    const store = context.getStore() ?? {};
+    return store.actor?.id || store.reviewActor || "owner";
+  };
   const markReview = budget.markReview;
   budget.markReview = p => {
     owner();

@@ -2,11 +2,11 @@ export default {
   mutate: [
     "src/backup.js",
     "src/reviews.js",
-    "src/core.js:116-157",
+    "src/core.js:116-154",
     "src/core.js:383-384",
     "src/planning.js:2-6",
-    "src/access.js:64-73",
-    "src/access.js:561-561",
+    "src/access.js:64-76",
+    "src/access.js:564-564",
   ],
   testRunner: "command",
   commandRunner: {
