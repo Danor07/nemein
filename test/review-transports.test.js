@@ -114,6 +114,9 @@ test("review window escapes AI text, shows evidence, and marks only on explicit 
     assert.equal(html.includes('href="https://evil'), false);
     assert.match(html, /Cobertura de extractos no declarada/);
     assert.match(html, /Paquete completo conservado/);
+    assert.match(html, /Guardado por: vos</);
+    assert.match(html, /Sin metas al corte\./);
+    assert.match(html, /Sin vencimientos conocidos\./);
     assert.equal(b.getReview({ id: "hostile" }).reviewed_at, null);
     const csrf = html.match(/name="_csrf" value="([^"]+)"/)[1];
     const post = (body) =>
@@ -135,6 +138,7 @@ test("review window escapes AI text, shows evidence, and marks only on explicit 
     const list = await (await fetch(base + "/?view=reviews")).text();
     assert.match(list, /Historial/);
     assert.match(list, /Revisado/);
+    assert.match(list, /1 revisión\./);
     // Stored UTC instants follow this computer's zone and format, never raw ISO.
     const { created_at } = b.getReview({ id: "hostile" });
     assert.equal(list.includes(created_at), false);
@@ -152,6 +156,18 @@ test("review window escapes AI text, shows evidence, and marks only on explicit 
     });
     assert.equal(created.status, 302);
     assert.equal(b.listReviews().total, 2);
+    const c = b.createConnection({ label: "<i>IA</i>" });
+    b.setRule({ connection_id: c.id, action: "review-save", decision: "allow" });
+    b.forAgent(c.token).saveReview({
+      id: "by-agent",
+      package: packageData,
+      report: "",
+      generator: "IA",
+    });
+    const byAgent = await (
+      await fetch(base + "/?view=reviews&review=by-agent")
+    ).text();
+    assert.match(byAgent, /Guardado por: &lt;i&gt;IA&lt;\/i&gt;</);
   } finally {
     await new Promise((r) => server.close(r));
   }

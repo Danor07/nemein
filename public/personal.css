@@ -20,7 +20,7 @@ main { min-width: 0; }
 .account-row strong { font-size:var(--body); }
 .account-row .negative { color:#ffb7ad !important; }
 .sidebar nav a span { font-size:var(--subtitle); }
-.topbar { border-bottom:1px solid var(--line); background:var(--surface); }
+.topbar { border-bottom:1px solid var(--line); background:var(--surface); color:var(--muted); }
 .page { max-width:1500px; margin:0 auto; padding:40px; }
 h1 { font-size:var(--title); letter-spacing:-1px; line-height:1.2; }
 h2 { font-size:var(--subtitle); }
@@ -113,3 +113,6 @@ dialog::backdrop { background:rgb(10 30 20 / .45); }
 .audit-row>span { display:block; }
 @media(max-width:700px){ .permission-row,.connection-create { grid-template-columns:1fr; } .permission-row>div { grid-column:auto; } }
 .review-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.review-more>summary { min-height:44px; padding:12px 0; box-sizing:border-box; }
+.review-more+.review-more { margin-top:8px; }
+.category-editor form { flex-wrap:wrap; } .category-editor button { white-space:nowrap; }
