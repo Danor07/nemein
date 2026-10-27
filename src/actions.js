@@ -1,4 +1,8 @@
 export const actions = Object.freeze({
+  "review-package": { method: "reviewPackage", label: "Preparar revisión: el paquete financiero saldrá hacia la IA que elegiste" },
+  "review-save": { method: "saveReview", label: "Guardar informe y paquete de revisión", write: true },
+  "review-list": { method: "listReviews", label: "Consultar lista de revisiones" },
+  "review-get": { method: "getReview", label: "Consultar informe y paquete: podrán salir hacia la IA que elegiste" },
   export: {
     method: "exportData",
     label: "Exportar datos financieros completos",

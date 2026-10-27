@@ -15,7 +15,7 @@
     "test:unit": "node --test test/*.test.js",
     "test:pbt": "node --test test/properties/*.property.test.js",
     "test:fuzz": "node --test test/fuzz/*.test.js",
-    "test:mutation": "stryker run stryker.export.config.mjs && node scripts/mutation-gate.js reports/export-mutation/mutation.json && stryker run stryker.config.mjs && node scripts/mutation-gate.js",
+    "test:mutation": "stryker run stryker.export.config.mjs && node scripts/mutation-gate.js reports/export-mutation/mutation.json && stryker run stryker.config.mjs && node scripts/mutation-gate.js && stryker run stryker.workflow.config.mjs && node scripts/mutation-gate.js reports/workflow-mutation/mutation.json",
     "quality": "npm run lint && npm run test:unit && npm run test:pbt && npm run test:fuzz && npm run test:mutation"
   },
   "dependencies": {

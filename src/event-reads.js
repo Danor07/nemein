@@ -1,4 +1,5 @@
 import { exportData } from "./export.js";
+import { attachReviews } from "./reviews.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 export const reviewedReadContext = new AsyncLocalStorage();
 import { Buffer } from "node:buffer";
@@ -39,7 +40,7 @@ export function decodeCursor(token) {
   }
 }
 
-export function attachEventReads(budget) {
+export function attachEventReads(budget, reviewDomain) {
   const db = budget.db;
   const identity = db.prepare(
     "SELECT source FROM event_identity WHERE singleton=1",
@@ -100,6 +101,8 @@ export function attachEventReads(budget) {
         options,
       );
     });
+
+  attachReviews(budget, { ...reviewDomain, readTransaction, position: () => ({ cursor: encode(head()) }) });
 
   budget.readEvents = ({ after, limit = 100 } = {}) => {
     const position = decodeCursor(after);

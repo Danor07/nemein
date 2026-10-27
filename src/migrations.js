@@ -7,6 +7,7 @@ const files = [
   "003-events.sql",
   "004-agent-access.sql",
   "005-audit-policy.sql",
+  "006-reviews.sql",
 ];
 export const schemaVersion = files.length;
 const migrations = files.map((name, i) => {
@@ -32,6 +33,7 @@ const columns = (db, table) =>
     .all()
     .map((c) => c.name);
 const required = {
+  reviews: "id,package_json,report,generated_by,generator,created_at,reviewed_at",
   accounts: "id,name,type",
   groups_: "id,name",
   categories: "id,group_id,name",

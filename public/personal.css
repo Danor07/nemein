@@ -112,3 +112,4 @@ dialog::backdrop { background:rgb(10 30 20 / .45); }
 .audit-row { padding:16px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
 .audit-row>span { display:block; }
 @media(max-width:700px){ .permission-row,.connection-create { grid-template-columns:1fr; } .permission-row>div { grid-column:auto; } }
+.review-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }

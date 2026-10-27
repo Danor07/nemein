@@ -49,7 +49,11 @@
         "import-preview",
         "import-mapping",
         "account-transactions",
-        "export"
+        "export",
+        "review-package",
+        "review-save",
+        "review-list",
+        "review-get"
       ]
     },
     "args": {
@@ -88,7 +92,8 @@
               "recurring-create",
               "recurring-post",
               "recurring-toggle",
-              "transaction-delete"
+              "transaction-delete",
+              "review-save"
             ]
           }
         }

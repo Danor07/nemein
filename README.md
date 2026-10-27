@@ -138,7 +138,7 @@ En Windows, por defecto:
 
 La carpeta conserva el nombre `PresupuestoCero` para mantener los presupuestos existentes; el identificador de instalación también se mantiene. La variable `BUDGET_DATA_DIR` permite elegir otra carpeta, tanto para escritorio como para servidor, CLI y MCP. Todos deben usar la misma carpeta para compartir el presupuesto.
 
-La base usa WAL y claves foráneas. Se respalda con la API de backup de SQLite (no se copia solamente el archivo mientras el WAL está abierto). Se hace una copia al primer arranque de cada día; mientras la app permanece abierta se comprueba cada hora. Se guardan las últimas 30 copias diarias. No se hacen copias cuando la aplicación está cerrada. La copia de hoy preserva el primer estado respaldado ese día.
+La base usa WAL y claves foráneas. Se respalda con la API de backup de SQLite (no se copia solamente el archivo mientras el WAL está abierto). Se hace una copia al primer arranque de cada día; mientras la app permanece abierta se comprueba cada hora. Por defecto se guardan las últimas 30 copias diarias, preservando el primer estado respaldado ese día. La CLI permite respaldar con la ventana cerrada y `BUDGET_BACKUP_DIR` permite elegir un destino externo. [Configurar una tarea diaria, verificar y recuperar](docs/respaldos.md).
 
 Para restaurar: cerrá escritorio, servidor, CLI y MCP; guardá una copia de la carpeta de datos completa; reemplazá budget.db con la copia elegida y retirá los archivos budget.db-wal y budget.db-shm anteriores antes de volver a abrir. No combines archivos WAL de una base con otra. Las copias en el mismo disco no protegen contra pérdida del equipo. Restaurar una copia restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes.
 

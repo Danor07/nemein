@@ -1,4 +1,5 @@
 import { migrate } from "./migrations.js";
+import { externalBackup } from "./backup.js";
 import { enableWal } from "./sqlite-startup.js";
 import { attachAccess } from "./access.js";
 import { attachEvents } from "./events.js";
@@ -112,15 +113,16 @@ export function openBudget(dir = defaultDir()) {
       return Number(r.lastInsertRowid);
     })();
   }
-  function snapshot(m = today().slice(0, 7)) {
+  function snapshot(m = today().slice(0, 7), cutoff) {
     month(m);
-    const end = m + "-31";
+    const end = cutoff === undefined ? m + "-31" : date(cutoff);
     const categories = all(
       `SELECT c.*,g.name group_name,COALESCE((SELECT amount FROM allocations WHERE category_id=c.id AND month=?),0) assigned,
- COALESCE((SELECT SUM(amount) FROM transactions WHERE category_id=c.id AND kind='normal' AND substr(date,1,7)=?),0) activity,
+ COALESCE((SELECT SUM(amount) FROM transactions WHERE category_id=c.id AND kind='normal' AND substr(date,1,7)=? AND date<=?),0) activity,
  COALESCE((SELECT SUM(amount) FROM allocations WHERE category_id=c.id AND month<=?),0)+COALESCE((SELECT SUM(amount) FROM transactions WHERE category_id=c.id AND kind='normal' AND date<=?),0) available FROM categories c JOIN groups_ g ON g.id=c.group_id ORDER BY g.id,c.id`,
       m,
       m,
+      end,
       m,
       end,
     );
@@ -138,12 +140,15 @@ export function openBudget(dir = defaultDir()) {
       categories,
       groups: all("SELECT * FROM groups_"),
       accounts: all(
-        "SELECT a.*,COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id GROUP BY a.id",
+        "SELECT a.*,COALESCE(SUM(t.amount),0) balance FROM accounts a LEFT JOIN transactions t ON t.account_id=a.id AND (? IS NULL OR t.date<=?) GROUP BY a.id",
+        cutoff ?? null,
+        cutoff ?? null,
       ),
       memory: all("SELECT * FROM memory"),
       transactions: all(
-        "SELECT t.*,a.name account_name,c.name category_name FROM transactions t JOIN accounts a ON a.id=t.account_id LEFT JOIN categories c ON c.id=t.category_id WHERE substr(t.date,1,7)=? ORDER BY t.date DESC,t.id DESC",
+        "SELECT t.*,a.name account_name,c.name category_name FROM transactions t JOIN accounts a ON a.id=t.account_id LEFT JOIN categories c ON c.id=t.category_id WHERE substr(t.date,1,7)=? AND t.date<=? ORDER BY t.date DESC,t.id DESC",
         m,
+        end,
       ),
     };
   }
@@ -373,8 +378,13 @@ export function openBudget(dir = defaultDir()) {
     }
     return { spending, history };
   }
-  let backing;
+  // Requested backups may go outside; the window's daily copies stay local and never block startup.
   async function backup() {
+    if (process.env.BUDGET_BACKUP_DIR === undefined) return dailyBackup();
+    return externalBackup(db, process.env.BUDGET_BACKUP_DIR);
+  }
+  let backing;
+  async function dailyBackup() {
     if (backing) return backing;
     backing = (async () => {
       const folder = path.join(dir, "backups");
@@ -405,7 +415,7 @@ export function openBudget(dir = defaultDir()) {
   const budget = {
     db,
     dir,
-    snapshot,
+    snapshot: (m) => snapshot(m),
     createAccount,
     addTransaction,
     allocate,
@@ -415,6 +425,7 @@ export function openBudget(dir = defaultDir()) {
     importCsv,
     reports,
     backup,
+    dailyBackup,
     categorize: (p) => {
       const t = one(
         "SELECT * FROM transactions WHERE id=? AND kind='normal'",
@@ -479,5 +490,5 @@ export function openBudget(dir = defaultDir()) {
     },
     close: () => db.close(),
   };
-  return attachAccess(attachEvents(Object.assign(budget, planning(budget, { money, date, month, today }))));
+  return attachAccess(attachEvents(Object.assign(budget, planning(budget, { money, date, month, today })), { date, today, snapshotAt: cut => snapshot(cut.slice(0, 7), cut) }));
 }
