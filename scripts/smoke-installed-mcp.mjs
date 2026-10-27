@@ -8,12 +8,24 @@ import {
 import path from "node:path";
 import os from "node:os";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const root = path.resolve(process.argv[2]);
 const runtime = path.join(root, "runtime");
+const nodeVersion = readFileSync(
+  new URL("../.node-version", import.meta.url),
+  "utf8",
+).trim();
+assert.equal(
+  execFileSync(path.join(runtime, "node.exe"), ["--version"], {
+    encoding: "utf8",
+    windowsHide: true,
+  }).trim(),
+  `v${nodeVersion}`,
+);
 const load = (name) => import(pathToFileURL(path.join(runtime, "src", name)));
 const { openBudget } = await load("core.js");
 const { saveCredential, readAgentToken } = await load("credentials.js");
