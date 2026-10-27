@@ -61,6 +61,19 @@ export function attachAccess(budget) {
     if (context.getStore()?.actor)
       throw error("OWNER_REQUIRED", "Esta acción se administra desde Nemein.");
   };
+  budget.reviewAuthor = () => {
+    const store = context.getStore() ?? {};
+    return store.actor?.id || store.reviewActor || "owner";
+  };
+  const markReview = budget.markReview;
+  budget.markReview = p => {
+    owner();
+    return db.transaction(() => {
+      const result = markReview(p);
+      audit("owner", "review-mark", p, "allow", "Revisión del propietario");
+      return result;
+    }).immediate();
+  };
   function authenticate(token, version) {
     if (typeof token !== "string" || token.length < 32)
       throw error(
@@ -548,7 +561,7 @@ export function attachAccess(budget) {
               "El presupuesto cambió desde la propuesta. Pedí una nueva propuesta con la base actual.",
             );
           const result = reviewedReadContext.run(true, () =>
-            context.run({ internal: true }, () =>
+            context.run({ internal: true, reviewActor: proposal.actor }, () =>
               originals[proposal.action](...callArgs(proposal.action, args)),
             ),
           );

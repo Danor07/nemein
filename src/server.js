@@ -108,6 +108,12 @@ export function createApp(budget, { installationRoots } = {}) {
     "Gs. " +
     new Intl.NumberFormat("es-PY", { maximumFractionDigits: 0 }).format(n);
   app.locals.displayDate = (d) => d.split("-").reverse().join("/");
+  // Stored instants are UTC; show them in this computer's time zone and regional format.
+  app.locals.displayTime = (iso) =>
+    new Date(iso).toLocaleString(undefined, {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
   app.locals.today = today;
   app.locals.csrf = csrf;
   const render = (req, res, extra = {}) => {
@@ -138,6 +144,8 @@ export function createApp(budget, { installationRoots } = {}) {
             })
           : null,
       newConnection: null,
+      reviewList: activeView === "reviews" ? budget.listReviews({offset:Number(req.query.offset || 0)}) : null,
+      reviewDetail: activeView === "reviews" && req.query.review ? budget.getReview({id:req.query.review}) : null,
       connectionConfig: null,
       exportId: "",
       demo: process.env.BUDGET_DEMO === "1",
@@ -183,6 +191,14 @@ export function createApp(budget, { installationRoots } = {}) {
     try {
       const p = req.body;
       switch (req.params.action) {
+        case "review-mark":
+          budget.markReview({id:p.id});
+          return redirect(req,res,"Revisión marcada por el propietario.");
+        case "review-create": {
+          const packageData=budget.reviewPackage({from:p.from,to:p.to,as_of:p.as_of});
+          budget.saveReview({id:randomBytes(16).toString("hex"),package:packageData,report:"",generator:"Paquete estructurado de Nemein"});
+          return redirect(req,res,"Paquete guardado. Todavía no está revisado.");
+        }
         case "connection-create":
           return showConnection(req, res, budget.createConnection(p));
         case "connection-rotate":
@@ -336,7 +352,7 @@ export function createApp(budget, { installationRoots } = {}) {
 }
 export async function start() {
   const budget = openBudget();
-  await budget.backup();
+  await budget.dailyBackup();
   const app = createApp(budget);
   const server = app.listen(Number(process.env.PORT || 0), "127.0.0.1", () =>
     process.stdout.write(
@@ -346,7 +362,7 @@ export async function start() {
   const timer = setInterval(
     () =>
       budget
-        .backup()
+        .dailyBackup()
         .catch((e) => console.error("Error de respaldo:", e.message)),
     60 * 60 * 1000,
   );

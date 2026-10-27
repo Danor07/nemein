@@ -1,4 +1,9 @@
 // Planning shares the ledger; a forecast never changes a balance.
+export function goalProgress(g, c, m) {
+  const saved = Math.max(0, c.available), remaining = Math.max(0, g.amount - saved);
+  const [y, mo] = m.split('-').map(Number), [dy, dm] = g.due_date.split('-').map(Number);
+  return { ...g, name: c.name, saved, remaining, monthly: Math.ceil(remaining / Math.max(1, (dy-y)*12+dm-mo+1)), progress: Math.min(100, Math.floor(saved/g.amount*100)) };
+}
 export function planning(b, { money, date, month, today }) {
   const db = b.db;
   const validCategory = id => {
@@ -17,9 +22,7 @@ export function planning(b, { money, date, month, today }) {
     const s = b.snapshot(m);
     return db.prepare('SELECT * FROM goals ORDER BY due_date').all().map(g => {
       const c = s.categories.find(c => c.id === g.category_id);
-      const saved = Math.max(0, c.available), remaining = Math.max(0, g.amount - saved);
-      const [y, mo] = m.split('-').map(Number), [dy, dm] = g.due_date.split('-').map(Number);
-      return { ...g, name: c.name, saved, remaining, monthly: Math.ceil(remaining / Math.max(1, (dy-y)*12+dm-mo+1)), progress: Math.min(100, Math.floor(saved/g.amount*100)) };
+      return goalProgress(g, c, m);
     });
   }
   function createRecurring(p) {

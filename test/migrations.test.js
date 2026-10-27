@@ -216,7 +216,7 @@ test("migrations: numbered prefix upgrades only pending migrations", (t) => {
   const dir = directory(t),
     b = openBudget(dir);
   b.db.exec(
-    "ALTER TABLE agent_audit DROP COLUMN policy; DELETE FROM schema_migrations WHERE version=5; PRAGMA user_version=4;",
+    "DROP TABLE reviews; ALTER TABLE agent_audit DROP COLUMN policy; DELETE FROM schema_migrations WHERE version>=5; PRAGMA user_version=4;",
   );
   const history = b.db
     .prepare("SELECT * FROM schema_migrations ORDER BY version")
@@ -344,8 +344,27 @@ test("migrations: concurrent processes adopt the same legacy budget once", async
   const b = openBudget(dir);
   try {
     verifyHistory(b.db);
-    assert.deepEqual(rows(b.db), before);
+    assert.deepEqual(rows(b.db), { ...before, reviews: [] });
   } finally {
     b.close();
   }
+});
+
+test("reviews migration upgrades schema 5 and rolls back a conflicting table", (t) => {
+  const dir = directory(t), b = openBudget(dir);
+  b.createAccount({name:"Before 006",type:"efectivo",balance:20,date:"2026-01-01"});
+  b.db.exec("DROP TABLE reviews; DELETE FROM schema_migrations WHERE version=6; PRAGMA user_version=5;");
+  const before=state(b.db);
+  b.db.exec("CREATE TABLE reviews(old TEXT);");
+  const conflict=state(b.db);b.close();
+  assert.throws(()=>openBudget(dir));
+  const inspect=new Database(path.join(dir,"budget.db"));
+  assert.deepEqual(state(inspect),conflict);inspect.exec("DROP TABLE reviews;");inspect.close();
+  const updated=openBudget(dir);
+  try {
+    const after=rows(updated.db);delete after.reviews;
+    assert.deepEqual(after,before.rows);
+    assert.equal(updated.listReviews().total,0);
+    assert.equal(updated.db.pragma("user_version",{simple:true}),6);
+  }finally{updated.close();}
 });

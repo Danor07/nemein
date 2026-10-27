@@ -1,0 +1,36 @@
+export default {
+  mutate: [
+    "src/backup.js",
+    "src/reviews.js",
+    "src/core.js:116-154",
+    "src/core.js:383-384",
+    "src/planning.js:2-6",
+    "src/access.js:64-76",
+    "src/access.js:564-564",
+  ],
+  testRunner: "command",
+  commandRunner: {
+    command:
+      "node --test test/backups.test.js test/reviews.test.js test/properties/review.property.test.js test/fuzz/review.test.js test/fuzz/backup.test.js",
+  },
+  coverageAnalysis: "off",
+  concurrency: 2,
+  timeoutMS: 5000,
+  timeoutFactor: 2,
+  reporters: ["clear-text", "json", "html"],
+  jsonReporter: { fileName: "reports/workflow-mutation/mutation.json" },
+  htmlReporter: { fileName: "reports/workflow-mutation/mutation.html" },
+  thresholds: { high: 90, low: 90, break: 90 },
+  ignorePatterns: [
+    "**",
+    "!src/**",
+    "!test/backups.test.js",
+    "!test/reviews.test.js",
+    "!test/properties/review.property.test.js",
+    "!test/fuzz/review.test.js",
+    "!test/fuzz/backup.test.js",
+    "!package.json",
+  ],
+  tempDirName: ".stryker-tmp",
+  cleanTempDir: true,
+};

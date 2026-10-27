@@ -20,7 +20,7 @@ export const eventOperations = Object.freeze([
   "toggleRecurring",
 ]);
 
-export function attachEvents(budget) {
+export function attachEvents(budget, reviewDomain) {
   const db = budget.db;
   const source = db
     .prepare("SELECT source FROM event_identity WHERE singleton=1")
@@ -67,5 +67,5 @@ export function attachEvents(budget) {
         .immediate();
     };
   }
-  return attachEventReads(budget);
+  return attachEventReads(budget, reviewDomain);
 }
