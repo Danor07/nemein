@@ -146,6 +146,7 @@ export function createApp(budget, { installationRoots } = {}) {
       newConnection: null,
       reviewList: activeView === "reviews" ? budget.listReviews({offset:Number(req.query.offset || 0)}) : null,
       reviewDetail: activeView === "reviews" && req.query.review ? budget.getReview({id:req.query.review}) : null,
+      reviewConnections: activeView === "reviews" && req.query.review ? budget.accessState().connections : null,
       connectionConfig: null,
       exportId: "",
       demo: process.env.BUDGET_DEMO === "1",

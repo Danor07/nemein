@@ -1,26 +1,26 @@
 <div class="page-title"><div><h1>Revisiones</h1><p>Un corte de tus datos, su informe y tu revisión personal.</p></div></div>
-<% if(reviewDetail){ const r=reviewDetail, p=r.package; %>
+<% if(reviewDetail){ const r=reviewDetail, p=r.package, author=r.generated_by==='owner'?'vos':reviewConnections.find(c=>c.id===r.generated_by)?.label||'una conexión'; %>
 <p><a href="/?view=reviews">← Todas las revisiones</a></p>
 <section class="panel"><h2>Revisión del <%= displayDate(p.period.from) %> al <%= displayDate(p.period.to) %></h2>
-<p>Corte: <%= displayDate(p.as_of) %> · <%= p.time_zone %>. Guardado: <%= displayTime(r.created_at) %>.</p>
-<p>Redacción declarada: <%= r.generator %>. Guardado por: <%= r.generated_by %>.</p>
-<p><strong><%= r.reviewed_at ? 'Revisado por vos el '+displayTime(r.reviewed_at) : 'Pendiente de tu revisión' %></strong>. Abrir este informe no lo marca como revisado.</p>
+<p>Corte: <%= displayDate(p.as_of) %> · <%= p.time_zone %> · Guardado: <%= displayTime(r.created_at) %></p>
+<p>Redacción declarada: <%= r.generator %> · Guardado por: <%= author %></p>
+<p><strong><%= r.reviewed_at ? 'Revisado por vos: '+displayTime(r.reviewed_at) : 'Pendiente de tu revisión' %></strong></p><p>Abrir este informe no lo marca como revisado.</p>
 <p>Este informe conserva su corte; los movimientos posteriores no actualizan sus cifras. Cobertura de extractos no declarada.</p>
 <h3>Importes registrados</h3><p>Por presupuestar: <strong><%= gs(p.recorded.ready) %></strong>. Incluye la reserva de asignaciones futuras.</p>
 <p>Ingresos del período: <%= gs(p.recorded.metrics.income) %> · Gastos netos de reintegros: <%= gs(p.recorded.metrics.spending) %>.</p>
 <div class="table-wrap"><table><thead><tr><th>Cuenta</th><th>Saldo al corte</th><th>Última conciliación hasta el corte</th></tr></thead><tbody>
 <% for(const a of p.recorded.accounts){ %><tr><td><a href="/?view=reconcile&account=<%= a.id %>"><%= a.name %></a></td><td><%= gs(a.balance) %></td><td><%= a.last_reconciliation ? displayDate(a.last_reconciliation.date)+' · '+gs(a.last_reconciliation.balance) : 'Sin conciliación' %></td></tr><% } %>
 </tbody></table></div>
-<h3>Metas al corte</h3><ul><% for(const g of p.recorded.goals){ %><li><%= g.name %>: <%= gs(g.saved) %> disponibles de <%= gs(g.amount) %> · <%= g.progress %> %</li><% } %></ul>
-<h3>Previsto: próximos vencimientos conocidos</h3><p>No son movimientos registrados ni una proyección completa de caja.</p><ul><% for(const v of p.projected.upcoming){ %><li><%= displayDate(v.next_date) %> · <%= v.payee %> · <%= gs(v.amount) %></li><% } %></ul>
+<h3>Metas al corte</h3><% if(p.recorded.goals.length){ %><ul><% for(const g of p.recorded.goals){ %><li><%= g.name %>: <%= gs(g.saved) %> disponibles de <%= gs(g.amount) %> · <%= g.progress %> %</li><% } %></ul><% }else{ %><p>Sin metas al corte.</p><% } %>
+<h3>Previsto: próximos vencimientos conocidos</h3><p>No son movimientos registrados ni una proyección completa de caja.</p><% if(p.projected.upcoming.length){ %><ul><% for(const v of p.projected.upcoming){ %><li><%= displayDate(v.next_date) %> · <%= v.payee %> · <%= gs(v.amount) %></li><% } %></ul><% }else{ %><p>Sin vencimientos conocidos.</p><% } %>
 <h3>Informe y sugerencias de IA</h3><pre class="review-text"><%= r.report || 'Sin texto de IA. El paquete estructurado está disponible.' %></pre>
-<details><summary>Comprobar movimientos usados en el período</summary><div class="table-wrap"><table><thead><tr><th>Registro</th><th>Fecha</th><th>Beneficiario</th><th>Importe</th><th>Tipo</th></tr></thead><tbody><% for(const t of p.evidence){ %><tr><td>#<%= t.id %></td><td><a href="/?view=transactions&month=<%= t.date.slice(0,7) %>"><%= displayDate(t.date) %></a></td><td><%= t.payee %></td><td><%= gs(t.amount) %></td><td><%= t.kind %></td></tr><% } %></tbody></table></div></details>
-<details><summary>Paquete completo conservado</summary><pre class="review-text"><%= JSON.stringify(p,null,2) %></pre></details>
+<details class="review-more"><summary>Comprobar movimientos usados en el período</summary><div class="table-wrap"><table><thead><tr><th>Registro</th><th>Fecha</th><th>Beneficiario</th><th>Importe</th><th>Tipo</th></tr></thead><tbody><% for(const t of p.evidence){ %><tr><td>#<%= t.id %></td><td><a href="/?view=transactions&month=<%= t.date.slice(0,7) %>"><%= displayDate(t.date) %></a></td><td><%= t.payee %></td><td><%= gs(t.amount) %></td><td><%= {normal:'Movimiento',opening:'Saldo inicial',transfer:'Transferencia'}[t.kind]||t.kind %></td></tr><% } %></tbody></table></div></details>
+<details class="review-more"><summary>Paquete completo conservado</summary><pre class="review-text"><%= JSON.stringify(p,null,2) %></pre></details>
 <% if(!r.reviewed_at){ %><form method="post" action="/action/review-mark"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="reviews"><input type="hidden" name="id" value="<%= r.id %>"><button>Lo revisé</button></form><% } %>
 </section>
 <% }else{ %>
 <section class="panel"><h2>Guardar un paquete sin IA</h2><p>Podés revisar los datos aunque tu IA no esté disponible.</p><form method="post" action="/action/review-create" class="form-grid"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="reviews"><label>Desde<input type="date" name="from" value="<%= today().slice(0,7)+'-01' %>" required></label><label>Hasta<input type="date" name="to" value="<%= today() %>" required></label><label>Corte de saldos<input type="date" name="as_of" value="<%= today() %>" max="<%= today() %>" required></label><div class="form-submit"><button>Guardar paquete</button></div></form></section>
-<section class="panel spaced"><h2>Historial</h2><p><%= reviewList.total %> revisiones. Sólo vos podés marcarlas como revisadas.</p><ul><% for(const r of reviewList.items){ %><li><a href="/?view=reviews&review=<%= encodeURIComponent(r.id) %>"><%= displayTime(r.created_at) %> · <%= r.generator %></a> · <%= r.reviewed_at?'Revisado':'Pendiente' %></li><% } %></ul>
+<section class="panel spaced"><h2>Historial</h2><p><%= reviewList.total %> <%= reviewList.total===1?'revisión':'revisiones' %>. Sólo vos podés marcarlas como revisadas.</p><ul><% for(const r of reviewList.items){ %><li><a href="/?view=reviews&review=<%= encodeURIComponent(r.id) %>"><%= displayTime(r.created_at) %> · <%= r.generator %></a> · <%= r.reviewed_at?'Revisado':'Pendiente' %></li><% } %></ul>
 <% if(reviewList.offset>0){ %><a href="/?view=reviews&offset=<%= Math.max(0,reviewList.offset-50) %>">Anteriores</a><% } %>
 <% if(reviewList.offset+50<reviewList.total){ %><a href="/?view=reviews&offset=<%= reviewList.offset+50 %>">Siguientes</a><% } %>
 </section><% } %>
