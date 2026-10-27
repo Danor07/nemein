@@ -48,6 +48,10 @@ Las herramientas whoami.exe e icacls.exe se resuelven en SystemRoot/System32, in
 
 El botón MCP anuncia preparación, evita envíos duplicados, conserva el ancho entre estados y permite reintentar un error persistente. Una respuesta HTTP correcta sólo confirma que el archivo fue preparado y que se solicitó guardarlo; no se afirma que el navegador lo escribió en disco. Se conserva la alternativa de ver/copiar y se prueban submit, errores HTTP y de red.
 
+## Runtime de compilación
+
+`test/build-runtime.test.js` comprueba que la preparación rechaza versiones distintas de `.node-version` antes de modificar el runtime, y que la versión y el hash del ejecutable copiado corresponden al Node de compilación. Incluye versiones generadas y entradas adversariales. El smoke instalado verifica la versión del Node distribuido antes del handshake MCP. Un alcance adicional en `stryker.runtime.config.mjs` mide la guarda y la copia de metadatos, manteniendo el umbral y el rechazo de timeouts del gate. Reportes en `reports/runtime-mutation/`.
+
 ## Exportaciones P9a
 
 Un segundo alcance de Stryker cubre src/export.js y src/event-reads.js con sus propiedades, fuzzing, límites y lectura concurrente. Mantiene mínimo 90 % y rechazo de timeouts/errores. Los dos alcances deben aprobar por separado; se conservan reportes en reports/mutation y reports/export-mutation. El gate acepta una ruta explícita de reporte y prueba que no la sustituye por el predeterminado. Los esquemas de exportación y propuestas se compilan con Ajv en modo estricto.

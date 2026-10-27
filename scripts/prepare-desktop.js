@@ -3,6 +3,13 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { writeDesktopNotices } from "./desktop-notices.js";
+const nodeVersion = fs
+  .readFileSync(new URL("../.node-version", import.meta.url), "utf8")
+  .trim();
+if (process.version !== `v${nodeVersion}`)
+  throw Error(
+    `La compilación requiere Node ${nodeVersion}; estás usando ${process.version}. No se preparó el runtime.`,
+  );
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = path.join(root, "desktop-resources", "runtime");
 fs.mkdirSync(target, { recursive: true });
@@ -38,7 +45,12 @@ for (const source of packages) {
     throw Error("Dependency outside project");
   fs.cpSync(source, path.join(target, relative), { recursive: true });
 }
-for (const name of ["package.json", "LICENSE", "PRIVACIDAD.md"])
+for (const name of [
+  "package.json",
+  "LICENSE",
+  "PRIVACIDAD.md",
+  ".node-version",
+])
   fs.copyFileSync(path.join(root, name), path.join(target, name));
 fs.copyFileSync(
   process.execPath,

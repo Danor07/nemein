@@ -4,7 +4,7 @@ Nemein es una aplicación local de presupuesto personal, con licencia MIT. Las c
 
 ## Preparar el entorno
 
-Se necesita Node.js 22 o posterior. Para la ventana de Windows también se necesitan Rust, las herramientas C++ de Visual Studio y WebView2.
+Se necesita Node.js 22.23.4, declarado en `.node-version`; la compilación del runtime exige esa versión exacta. Para la ventana de Windows también se necesitan Rust, las herramientas C++ de Visual Studio y WebView2.
 
     npm ci
     npm test

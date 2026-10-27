@@ -146,7 +146,7 @@ Más detalle en [PRIVACIDAD.md](PRIVACIDAD.md).
 
 ## Desarrollar
 
-Requisitos: Node.js 22+, Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: el usuario final no necesita Node instalado.
+Requisitos: Node.js 22.23.4 (versión de compilación en `.node-version`), Rust y las herramientas C++ de Visual Studio para Tauri en Windows; WebView2 instalado. El paquete de escritorio incluye su propio Node y las dependencias: el usuario final no necesita Node instalado. La preparación rechaza otras versiones antes de modificar el runtime generado.
 
 ```powershell
 npm ci
@@ -159,7 +159,7 @@ Para generar el instalador:
 npm run desktop:build
 ```
 
-La preparación incluye las licencias de Node y las dependencias Rust. Si tu instalación de Node no trae un archivo LICENSE junto al ejecutable, indicá su ubicación con `NODE_LICENSE_PATH` antes de compilar. Las dependencias Rust deben estar disponibles en la caché local de Cargo; podés prepararla con `cargo fetch --manifest-path src-tauri/Cargo.toml`. El instalador NSIS queda en `src-tauri/target/release/bundle/nsis/`, y después de compilar podés abrir `Abrir Nemein.cmd`.
+La preparación incluye las licencias de Node y las dependencias Rust. Si tu instalación de Node no trae un archivo LICENSE junto al ejecutable, indicá su ubicación con `NODE_LICENSE_PATH` antes de compilar. Las dependencias Rust deben estar disponibles en la caché local de Cargo; podés prepararla con `cargo fetch --manifest-path src-tauri/Cargo.toml`. El instalador NSIS queda en `src-tauri/target/release/bundle/nsis/`, y después de compilar podés abrir `Abrir Nemein.cmd`. [Node empaquetado, seguridad y compatibilidad MCP](docs/runtime.md).
 
 También se puede usar como aplicación web local con `npm start`. La consola imprime la URL en 127.0.0.1 con un puerto libre; nunca escucha en la red local. La ventana Tauri inicia y termina su servidor local automáticamente. `node scripts/preview.js` abre una vista previa con datos ficticios en `.preview-data/`, separada del presupuesto real.
 

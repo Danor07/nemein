@@ -1,4 +1,15 @@
-# Verificación actual — v0.3.0 (25/10/2026)
+# Comprobación local de Node — 27/10/2026 (sin release)
+
+- Sobre 4042bed más cambios locales: `.node-version` fija 22.23.4; preparación bloqueada con otro Node antes de modificar el runtime. CI Windows usa ese archivo; imagen Linux oficial 22.23.4 fijada por digest.
+- Distribución portátil de nodejs.org verificada con SHASUMS256.txt: ZIP Windows x64 `cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20`. El `node.exe` generado responde v22.23.4 y coincide con el binario de esa distribución: `dccc52de28d8df2ee22d2062424f8c563070d95d8ad70c54c4bf01d590dec14f`.
+- MEDIDO: cinco pruebas nuevas del empaquetado, incluidas versiones generadas y entradas adversariales; mutación de la guarda y metadatos 14/14, sin timeouts, errores ni casos sin cobertura. Lint sin advertencias.
+- MEDIDO con el Node 22.23.2 real de Hermes: la preparación se rechaza y el SHA256 del `node.exe` generado permanece intacto.
+- MEDIDO con Node 22.23.4: unitarias 120/121 (una omisión), propiedades 10/10 y fuzzing 6/6. Gate completo de mutación en curso; no se declara aprobado por estos resultados parciales.
+- MEDIDO contra `desktop-resources/runtime`: seis pruebas existentes de CLI/MCP/revisiones, con Node incluido 22.23.4 y SDK 1.32.1, aprobadas sobre presupuestos temporales. ABI Node 127, SQLite funcional; credenciales, permisos, revocación y exportación comprobados.
+- SDK MCP 1.x conservado: el requisito de Node 24 de los servidores de referencia v2 no es un requisito del SDK 1.32.1 instalado. [Alcance y fuentes](docs/runtime.md).
+- Sin tag, publicación, instalador nuevo ni cambio de versión de la aplicación. El Node global de Hermes y la instalación personal permanecen sin modificar. La CI nueva y el smoke de instalación limpia necesitan su ejecución remota posterior.
+
+# Verificación anterior — v0.3.0 (25/10/2026)
 
 - Código de exportaciones y lecturas en 5eb7ca7: [CI 40200682149 aprobado](https://github.com/Danor07/nemein/actions/runs/40200682149). Windows 112/112, credenciales instaladas 7/7, NSIS silencioso, registro, acceso de Inicio, MCP con 23 herramientas, exportación y arranque nativo.
 - Linux aislado: regresión 99/100 (omisión de ACL Windows), ocho propiedades y cuatro pruebas de fuzzing. Mutación exportaciones/lecturas 340/349 (97,42 %) y controles anteriores 466/489 (95,30 %); sin timeouts, errores ni casos sin cobertura.
