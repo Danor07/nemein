@@ -9,7 +9,7 @@ import {
   readdirSync,
   rmSync,
 } from "node:fs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
@@ -106,13 +106,9 @@ test("desktop build copies the verified executable and records its exact Node ve
     f.target,
     process.platform === "win32" ? "node.exe" : "node",
   );
-  assert.equal(
-    execFileSync(executable, ["--version"], {
-      encoding: "utf8",
-      windowsHide: true,
-    }).trim(),
-    `v${expected}`,
-  );
+  // Same bytes as the running Node, whose version the guard just accepted.
+  // Not executed here: CI mounts the temporary folder noexec.
+  assert.equal(process.version, `v${expected}`);
   const sha = (file) =>
     createHash("sha256").update(readFileSync(file)).digest("hex");
   assert.equal(sha(executable), sha(process.execPath));
