@@ -85,6 +85,8 @@ Los positivos del CSV se clasifican inicialmente como ingresos; los reintegros s
 
 La deduplicación compara cuenta + fecha + beneficiario + importe + número de ocurrencia dentro del archivo. Reimportar el mismo extracto no duplica registros y dos filas idénticas en el mismo extracto se conservan. Si dos extractos parciales contienen distintas operaciones idénticas del mismo día, sin identificador bancario no se pueden distinguir: revisá esos casos antes de confirmar. No cambies los textos ni importes de un archivo ya importado esperando que actualice operaciones.
 
+El CSV es el primer productor del [contrato de importación v1](docs/importaciones.md): JSON Schema 2020-12, procedencia, período declarado y vectores compartidos para futuros conectores. Conserva el flujo actual; validar el formato no concede permisos ni agrega una puerta de escritura JSON.
+
 ## Agentes: permisos y propuestas
 
 Las conexiones de agentes comienzan **sin permisos de lectura ni escritura**.
