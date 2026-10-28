@@ -5,6 +5,9 @@ import { attachAccess } from "./access.js";
 import { attachEvents } from "./events.js";
 import Database from "better-sqlite3";
 import { planning } from "./planning.js";
+import { date } from "./date.js";
+export { date } from "./date.js";
+import { csvImportBatch } from "./import-contract.js";
 
 import {
   mkdirSync,
@@ -28,17 +31,6 @@ export const defaultDir = () =>
     process.env.LOCALAPPDATA || path.join(os.homedir(), ".local", "share"),
     "PresupuestoCero",
   );
-export function date(value) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    Number(value.slice(0, 4)) < 1900 ||
-    Number(value.slice(0, 4)) > 2200 ||
-    new Date(value + "T12:00:00Z").toISOString().slice(0, 10) !== value
-  )
-    throw Error("Fecha inválida. Usá una fecha real entre 1900 y 2200.");
-  return value;
-}
 export function month(value) {
   if (typeof value !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value))
     throw Error("Mes inválido.");
@@ -323,17 +315,21 @@ export function openBudget(dir = defaultDir()) {
           payee,
           amount,
           category_id: cat,
-          import_key: key,
-          duplicate: !!one(
-            "SELECT id FROM transactions WHERE import_key=?",
-            key,
-          ),
+          id: key,
         };
       } catch (e) {
         throw Error(`Fila ${i + 2}: ${e.message}`, {cause:e});
       }
     });
-    return { headers, rows };
+    const batch = csvImportBatch(Number(accountId), rows);
+    return {
+      headers,
+      rows: batch.entries.map(({ id, ...row }) => ({
+        ...row,
+        import_key: id,
+        duplicate: !!one("SELECT id FROM transactions WHERE import_key=?", id),
+      })),
+    };
   }
   function importCsv(p) {
     return db.transaction(() => {
