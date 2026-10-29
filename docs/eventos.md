@@ -26,4 +26,4 @@ INVALID_CURSOR, INVALID_EVENT_LIMIT, CURSOR_MISMATCH, EVENT_HISTORY_GAP y EVENT_
 
 Las lecturas ordinarias no aceptan una transacción financiera sin confirmar. La aprobación manual de una consulta usa una transacción controlada para guardar respuesta y decisión juntas.
 
-Las pruebas cubren atomicidad, concurrencia del snapshot, replay, restauración, ramas divergentes y recuperación después de una salida abrupta de proceso. No simulan daño físico de disco. La entrega durable a servicios externos y nuevos transportes HTTP no están implementados.
+Las pruebas cubren atomicidad, concurrencia del snapshot, replay, restauración, ramas divergentes y recuperación después de una salida abrupta de proceso. No simulan daño físico de disco. La [API local v1](api-local.md) expone `event-snapshot` y `events` con el mismo cursor y los mismos permisos. SSE y entrega durable a servicios externos siguen pendientes.
