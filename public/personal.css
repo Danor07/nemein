@@ -106,7 +106,12 @@ dialog::backdrop { background:rgb(10 30 20 / .45); }
 .permission-group-head { display:flex; justify-content:space-between; align-items:end; gap:16px; flex-wrap:wrap; }
 .permission-group-head h3 { margin:0; }
 .permission-group-head .count { color:var(--muted); font-weight:400; }
-.permission-group-head label { min-width:200px; }
+.permission-all { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; background:var(--canvas); border-radius:var(--radius); padding:16px; margin-top:16px; }
+.permission-all h3 { margin:0; }
+.bulk-select { width:auto; min-height:36px; border-radius:999px; padding:6px 32px 6px 14px; font-weight:600; border:1px solid var(--line); background-color:var(--surface); color:var(--ink); }
+.bulk-select[data-state=allow] { background-color:var(--feedback-success-bg); color:var(--feedback-success-ink); border-color:currentColor; }
+.bulk-select[data-state=ask] { background-color:var(--feedback-warning-bg); color:var(--feedback-warning-ink); border-color:currentColor; }
+.bulk-select[data-state=deny] { background-color:var(--feedback-error-bg); color:var(--feedback-error-ink); border-color:currentColor; }
 .permission-row { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; border:0; border-top:1px solid var(--line); margin:0; padding:16px 0; min-width:0; }
 .permission-row legend { float:left; padding:0; max-width:100%; overflow-wrap:anywhere; }
 .permission-row legend+* { margin-left:auto; }

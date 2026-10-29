@@ -42,20 +42,36 @@ for (const form of forms) {
             : `${count} permisos sin guardar.`,
       );
   };
+  // A bulk selector shows the state of its rows and, when changed, sets them all.
+  const scopeRows = (select) => {
+    const scope = select.closest("[data-permission-scope]");
+    return scope.matches("[data-permission-group]")
+      ? scope.querySelectorAll("[data-permission-row]")
+      : form.querySelectorAll("[data-permission-row]");
+  };
+  const showBulk = () => {
+    for (const select of form.querySelectorAll("[data-bulk]")) {
+      const values = new Set(
+        [...scopeRows(select)].map(
+          (row) => row.querySelector("input[type=radio]:checked")?.value,
+        ),
+      );
+      select.value = values.size === 1 ? [...values][0] : "mixed";
+      select.dataset.state = select.value;
+    }
+  };
   form.dataset.saved = snapshot(form);
+  showBulk();
   form.addEventListener("change", (event) => {
-    const group = event.target.closest("[data-group-set]");
-    if (group && group.value) {
-      for (const row of group
-        .closest("[data-permission-group]")
-        .querySelectorAll("[data-permission-row]")) {
+    const bulk = event.target.closest("[data-bulk]");
+    if (bulk)
+      for (const row of scopeRows(bulk)) {
         const radio = row.querySelector(
-          `input[type=radio][value="${group.value}"]`,
+          `input[type=radio][value="${bulk.value}"]`,
         );
         if (radio) radio.checked = true;
       }
-      group.value = "";
-    }
+    showBulk();
     refresh();
   });
   form.addEventListener("submit", async (event) => {
