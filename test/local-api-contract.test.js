@@ -252,7 +252,7 @@ test("Transport errors classify domain failures and redact implementation errors
     });
   }
   for (const runtime of [
-    new TypeError("C:\private\path"),
+    new TypeError("C:\\private\\path"),
     new RangeError("Maximum call stack size exceeded"),
   ])
     assert.deepEqual(apiError(runtime), {
