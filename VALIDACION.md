@@ -1,3 +1,12 @@
+# Verificación — v0.4.0 (29/10/2026)
+
+- P15, contrato de importación v1, en [PR 7](https://github.com/Danor07/nemein/pull/7): [CI 40798572757 aprobado](https://github.com/Danor07/nemein/actions/runs/40798572757). Gate Linux aislado en 34 min y gate nativo Windows con NSIS silencioso, MCP instalado y arranque.
+- Gate local `npm run quality` aprobado: lint sin advertencias, regresión 129/130 (una omisión), propiedades 12/12 y fuzzing 8/8. Mutación: importación 96,00 %, exportaciones/lecturas 96,59 % y controles 99,18 %, con umbral 90, sin timeouts ni errores.
+- Versiones de aplicación, runtime y Cargo en 0.4.0. Esquema SQL 6: la migración 006 agrega revisiones y las publicadas no cambian.
+- Paquete 0.4.0: runtime con Node 22.23.4 incluido, CLI y MCP reales: 23 herramientas, export negado por defecto, JSON/CSV con total exacto, credencial privada y revocación. Archivos idénticos al checkout; sin bases, secretos ni herramientas de desarrollo.
+- Ejecutable nativo recompilado con rutas personales remapeadas, firmado con sello de tiempo y empaquetado sin reescribir el binario firmado. Arranque con presupuesto temporal: HTTP 200 y Chart.js local.
+- No se usaron presupuestos personales. El instalador se abre desde el Explorador, no desde una terminal MSIX.
+
 # Comprobación local de Node — 27/10/2026 (sin release)
 
 - Sobre 4042bed más cambios locales: `.node-version` fija 22.23.4; preparación bloqueada con otro Node antes de modificar el runtime. CI Windows usa ese archivo; imagen Linux oficial 22.23.4 fijada por digest.

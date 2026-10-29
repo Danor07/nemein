@@ -8,22 +8,24 @@ Versión experimental. Código abierto bajo licencia MIT.
 
 ## Descargar e instalar en Windows
 
-Descargá [Nemein 0.3.0](https://github.com/Danor07/nemein/releases/tag/v0.3.0): el archivo `Nemein-0.3.0-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
+Descargá [Nemein 0.4.0](https://github.com/Danor07/nemein/releases/tag/v0.4.0): el archivo `Nemein-0.4.0-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
 
 - **Instalá con doble clic desde el Explorador.** Si el instalador se abre desde una terminal de una app empaquetada (MSIX), como Codex, Windows lo instala dentro de la carpeta privada de esa app: el acceso del menú Inicio no funciona y la desinstalación no aparece en el sistema.
 - El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mostrar advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
 - `SHA256SUMS.txt` permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales.
 
-### Novedades de 0.3.0
+### Novedades de 0.4.0
 
-- Exportación financiera JSON/CSV por CLI y MCP, con permiso propio y cursor consistente para continuar con eventos.
-- Configuración MCP sin token visible, credencial privada, permisos que se niegan ante reglas inválidas y rutas de instalación verificadas.
-- Migraciones numeradas que conservan bases anteriores y validación de instalador/MCP en Windows limpio, además de propiedades, fuzzing y mutación.
+- Revisiones periódicas con permisos propios, inmutables una vez guardadas ([revisiones](docs/revisiones.md)).
+- Respaldos pedidos hacia una carpeta externa con `BUDGET_BACKUP_DIR`, sin bloquear el arranque ([respaldos](docs/respaldos.md)).
+- Contrato de importación único v1, con el CSV como primer productor y sin cambios de comportamiento ([importaciones](docs/importaciones.md)).
+- Node.js incluido actualizado a 22.23.4 por seguridad, y horas en la zona y el formato del sistema.
 
 ### Actualizar
 
 Antes de actualizar, guardá una copia de la carpeta de datos (ver [Dónde están tus datos](#dónde-están-tus-datos)). Las migraciones son numeradas y transaccionales, y conservan los datos de las bases anteriores ([migraciones](docs/migraciones.md)).
 
+- **Desde 0.3.0:** las conexiones siguen siendo compatibles. La migración 6 agrega las revisiones; sus acciones empiezan negadas.
 - **Desde 0.2.1 o anterior:** la configuración MCP ya no contiene el token, sino la ruta a una credencial privada. Renová la conexión en **Permisos y propuestas** y volvé a enlazar tu cliente. El generador de configuración MCP rechaza rutas dentro de MSIX; también se corrige el rechazo de formularios con «Origen no permitido».
 - **Desde 0.2.2:** las conexiones siguen siendo compatibles. La nueva acción export empieza negada; habilitala expresamente si querés exportar datos.
 - **Desde 0.1.0:** las conexiones comienzan sin permisos. Creá una conexión, elegí sus acciones y enlazá tu cliente MCP/CLI. `BUDGET_MCP_WRITE` y `BUDGET_EVENTS_READ` ya no conceden acceso.
