@@ -143,6 +143,7 @@ export function createApp(budget, { installationRoots } = {}) {
               offset: Number(req.query.proposalOffset || 0),
             })
           : null,
+      openConnection: req.query.open || "",
       newConnection: null,
       reviewList: activeView === "reviews" ? budget.listReviews({offset:Number(req.query.offset || 0)}) : null,
       reviewDetail: activeView === "reviews" && req.query.review ? budget.getReview({id:req.query.review}) : null,
@@ -179,6 +180,21 @@ export function createApp(budget, { installationRoots } = {}) {
       next(e);
     }
   });
+  const wantsJson = (req) => req.get("accept") === "application/json";
+  const ruleConditions = (p, suffix = "") => {
+    const conditions = {};
+    for (const field of ["max_amount", "account_id"]) {
+      const value = p[field + suffix];
+      if (value !== undefined && value !== "") {
+        if (!/^\d+$/.test(String(value)))
+          throw Error("El límite y la cuenta deben ser enteros.");
+        conditions[field] = Number(value);
+      }
+    }
+    if (Object.keys(conditions).length)
+      conditions.otherwise = p["otherwise" + suffix] || "deny";
+    return conditions;
+  };
   const redirect = (req, res, message) =>
     res.redirect(
       "/?" +
@@ -210,18 +226,37 @@ export function createApp(budget, { installationRoots } = {}) {
         case "connection-version":
           budget.changeConnectionVersion(p);
           break;
-        case "permission-set": {
-          const conditions = {};
-          for (const field of ["max_amount", "account_id"])
-            if (p[field] !== undefined && p[field] !== "") {
-              if (!/^\d+$/.test(String(p[field])))
-                throw Error("El límite y la cuenta deben ser enteros.");
-              conditions[field] = Number(p[field]);
-            }
-          if (Object.keys(conditions).length)
-            conditions.otherwise = p.otherwise || "deny";
-          budget.setRule({ ...p, conditions });
+        case "permission-set":
+          budget.setRule({ ...p, conditions: ruleConditions(p) });
           break;
+        case "permissions-set": {
+          const rules = Object.keys(p)
+            .filter((key) => key.startsWith("decision:"))
+            .map((key) => {
+              const action = key.slice(9);
+              return {
+                action,
+                decision: p[key],
+                conditions: ruleConditions(p, ":" + action),
+              };
+            });
+          const { changed } = budget.setRules({
+            connection_id: p.connection_id,
+            rules,
+          });
+          if (wantsJson(req)) return res.json({ changed });
+          return res.redirect(
+            "/?" +
+              new URLSearchParams({
+                view: "access",
+                open: p.connection_id,
+                notice: changed
+                  ? `Permisos guardados: ${changed} ${changed === 1 ? "cambio" : "cambios"}.`
+                  : "Los permisos ya estaban al día.",
+              }) +
+              "#connection-" +
+              encodeURIComponent(p.connection_id),
+          );
         }
         case "proposal-resolve":
           budget.resolveProposal({
@@ -342,6 +377,7 @@ export function createApp(budget, { installationRoots } = {}) {
     if (error.includes("UNIQUE constraint"))
       error = "Ya existe un registro con ese nombre.";
     res.status(400);
+    if (wantsJson(req)) return res.json({ error });
     try {
       req.query.month = undefined;
       render(req, res, { view: req.body?.view || "budget", error });
