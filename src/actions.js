@@ -125,6 +125,11 @@ export const actions = Object.freeze({
   },
 });
 export const actionVersion = 1;
+// Existing connection operations have no financial permission of their own.
+export const connectionActions = Object.freeze({
+  permissions: { method: "permissions", label: "Inspect own connection permissions" },
+  "proposal-status": { method: "proposalStatus", label: "Inspect own proposal" },
+});
 export function callArgs(action, p = {}) {
   switch (actions[action]?.mode) {
     case "month":

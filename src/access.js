@@ -168,6 +168,7 @@ export function attachAccess(budget) {
                 action_version: actionVersion,
                 base: meta.base ?? null,
                 force: meta.forceProposal === true,
+                ...(meta.requireBase ? { conditional: true } : {}),
               }),
             ),
           );
@@ -197,6 +198,15 @@ export function attachAccess(budget) {
                 );
               return { kind: "result", value: JSON.parse(old.result) };
             }
+          }
+          // The HTTP state condition shares the permission/write lock, after replay.
+          if (write && meta.requireBase) {
+            if (typeof meta.base !== "string" || meta.base.length > 1024)
+              throw error("BASE_REQUIRED", "A state cursor is required for this write.");
+            if (decodeCursor(meta.base).source !== one("SELECT source FROM event_identity WHERE singleton=1").source)
+              throw error("CURSOR_MISMATCH", "The cursor belongs to another budget.");
+            if (meta.base !== revision())
+              throw error("STATE_CONFLICT", "The budget changed. Read a new state before writing.");
           }
           if (decision.decision === "ask" || meta.forceProposal) {
             if (actions[action].async)
