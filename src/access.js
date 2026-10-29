@@ -404,6 +404,32 @@ export function attachAccess(budget) {
       );
     }).immediate();
   };
+  // All rules of one connection in one transaction: an invalid row saves none.
+  budget.setRules = ({ connection_id, rules }) => {
+    owner();
+    if (!Array.isArray(rules) || !rules.length)
+      throw error("INVALID_RULE", "No hay permisos para guardar.");
+    let changed = 0;
+    db.transaction(() => {
+      for (const rule of rules) {
+        const conditions = rule.conditions || {};
+        const old = one(
+          "SELECT r.decision,r.conditions,r.action_version FROM agent_rules r JOIN agent_connections c ON c.id=r.connection_id AND c.version=r.connection_version WHERE r.connection_id=? AND r.action=?",
+          connection_id,
+          rule.action,
+        );
+        const same = old
+          ? old.action_version === actionVersion &&
+            old.decision === rule.decision &&
+            old.conditions === json(conditions)
+          : rule.decision === "deny" && !Object.keys(conditions).length;
+        if (same) continue;
+        budget.setRule({ ...rule, connection_id, conditions });
+        changed++;
+      }
+    }).immediate();
+    return { changed };
+  };
   budget.revokeConnection = (id) => {
     owner();
     db.transaction(() => {

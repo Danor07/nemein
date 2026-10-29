@@ -6,12 +6,16 @@ export default {
     "src/core.js:379-380",
     "src/planning.js:2-6",
     "src/access.js:64-76",
-    "src/access.js:564-564",
+    "src/access.js:590-590",
+    "src/access.js:408-431",
+    "src/server.js:183-197",
+    "src/server.js:232-259",
+    "src/server.js:380-380",
   ],
   testRunner: "command",
   commandRunner: {
     command:
-      "node --test test/backups.test.js test/reviews.test.js test/properties/review.property.test.js test/fuzz/review.test.js test/fuzz/backup.test.js",
+      "node --test test/backups.test.js test/reviews.test.js test/properties/review.property.test.js test/fuzz/review.test.js test/fuzz/backup.test.js test/permissions-batch.test.js",
   },
   coverageAnalysis: "off",
   concurrency: 2,
@@ -24,6 +28,9 @@ export default {
   ignorePatterns: [
     "**",
     "!src/**",
+    "!views/**",
+    "!public/**",
+    "!test/permissions-batch.test.js",
     "!test/backups.test.js",
     "!test/reviews.test.js",
     "!test/properties/review.property.test.js",
