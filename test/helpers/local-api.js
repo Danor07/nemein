@@ -5,6 +5,10 @@ import path from "node:path";
 import { openBudget } from "../../src/core.js";
 import { createApp } from "../../src/server.js";
 
+// Shared by every fixture of a test file: once one request hangs, the rest fail at
+// once instead of each waiting for its own deadline.
+let transportFailure;
+
 export async function apiFixture(t, enabled = true) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-local-api-"));
   const budget = openBudget(dir);
@@ -21,7 +25,6 @@ export async function apiFixture(t, enabled = true) {
     rmSync(dir, { recursive: true, force: true });
   });
   const port = server.address().port;
-  let transportFailure;
   function send(action, body = { arguments: {} }, options = {}) {
     if (transportFailure) return Promise.reject(transportFailure);
     const data = options.raw ?? JSON.stringify(body);
