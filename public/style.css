@@ -733,6 +733,8 @@ summary:focus-visible {
   --feedback-success-ink: #355b4e;
   --feedback-error-bg: #fcebe6;
   --feedback-error-ink: #a13832;
+  --feedback-warning-bg: #fbf0d9;
+  --feedback-warning-ink: #85570a;
 }
 .action-button { display: inline-grid; max-width: 100%; min-height: 44px; }
 .action-size, .action-content { grid-area: 1 / 1; white-space: nowrap; }
