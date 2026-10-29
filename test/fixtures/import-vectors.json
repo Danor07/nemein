@@ -1,0 +1,617 @@
+{
+  "contract": "urn:nemein:schema:import-batch:1",
+  "valid": [
+    {
+      "name": "declared-leap-period",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown-period-income",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": null,
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": 1000000000000,
+            "category_id": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-declared-statement",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": []
+      }
+    },
+    {
+      "name": "same-day-two-distinct-facts",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-29",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          },
+          {
+            "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "negative-limit",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -1000000000000,
+            "category_id": 1
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "future-version",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 2,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "foreign-currency",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "USD",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "fractional-money",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": 0.5,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero-money",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": 0,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "string-money",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": "85000",
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "overflow-money",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": 1000000000001,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "missing-provenance-version",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "undeclared-period",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "untrusted-duplicate-flag",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1,
+            "duplicate": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "invalid-identity",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "bank-row-1",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty-beneficiary",
+      "code": "IMPORT_INVALID_BATCH",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": " \t",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "impossible-date",
+      "code": "IMPORT_INVALID_DATE",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-30",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "invalid-period-date",
+      "code": "IMPORT_INVALID_DATE",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2023-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "inverted-period",
+      "code": "IMPORT_INVALID_PERIOD",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-03-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "before-period",
+      "code": "IMPORT_OUTSIDE_PERIOD",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-01-31",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-period",
+      "code": "IMPORT_OUTSIDE_PERIOD",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-03-01",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "repeated-identity",
+      "code": "IMPORT_DUPLICATE_ID",
+      "batch": {
+        "version": 1,
+        "provenance": {
+          "source": "fixture:bank:account-a",
+          "connector": "fixture.csv",
+          "version": "1.0.0"
+        },
+        "period": {
+          "from": "2024-02-01",
+          "to": "2024-02-29"
+        },
+        "currency": "PYG",
+        "amount_unit": "integer",
+        "account_id": 1,
+        "entries": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": -85000,
+            "category_id": 1
+          },
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "date": "2024-02-29",
+            "payee": "Café",
+            "amount": 1,
+            "category_id": 1
+          }
+        ]
+      }
+    }
+  ]
+}
