@@ -112,7 +112,7 @@ Para pedir una acción revisable, el JSON incluye `_base` (cursor del snapshot),
 
     nemein.cmd proposal-status --file estado-propuesta.json
 
-Para trabajar sin el equipo principal, `proposal-create` recibe `{action,args,base,purpose,request_id}` y genera un sobre sin abrir la base. Guardá `.result` como archivo JSON. Más tarde, `proposal-submit --file propuesta.json` lo entrega con el token del cliente, sin ejecutarlo. Estados de entrega: undelivered, delivered, responded. No hay transporte HTTP ni sincronización de red automática.
+Para trabajar sin el equipo principal, `proposal-create` recibe `{action,args,base,purpose,request_id}` y genera un sobre sin abrir la base. Guardá `.result` como archivo JSON. Más tarde, `proposal-submit --file propuesta.json` lo entrega con el token del cliente, sin ejecutarlo. Estados de entrega: undelivered, delivered, responded. La entrega de archivos sigue en CLI/MCP; no hay sincronización de red automática.
 
 MCP incluye `permisos_conexion`, `ejecutar_accion`, `estado_propuesta` y `entregar_propuesta`. Los nombres anteriores siguen disponibles bajo sus permisos; las escrituras no devuelven implícitamente un snapshot que no haya sido autorizado. Otros comandos de CLI: overview, search, goals, goal-set, goal-remove, recurring, recurring-create, recurring-post, recurring-toggle, cube, category y group; sus parámetros están en [AGENTS.md](AGENTS.md).
 
@@ -125,9 +125,13 @@ Snapshot consistente, lectura paginada y seguimiento por terminal. Concedé even
     nemein.cmd event-snapshot --file examples/consulta.json
     nemein.cmd watch --after CURSOR --format ndjson
 
-Guardá el snapshot junto con su cursor. Persistí el cursor después de procesar cada evento y deduplicá por source + id. watch vuelve a comprobar permisos en cada página. Para seguimiento continuo se requiere permitir; una consulta en preguntar se revisa desde la bandeja. Se admiten NDJSON y JSON-seq; no se agregan transportes HTTP.
+Guardá el snapshot junto con su cursor. Persistí el cursor después de procesar cada evento y deduplicá por source + id. watch vuelve a comprobar permisos en cada página. Para seguimiento continuo se requiere permitir; una consulta en preguntar se revisa desde la bandeja. Se admiten NDJSON y JSON-seq. La API local permite consultar las mismas páginas por HTTP; SSE queda pendiente.
 
 Contratos y límites: [Eventos](docs/eventos.md).
+
+### API local abierta
+
+P9c agrega una API optativa en el mismo puerto de la interfaz, sólo en `127.0.0.1`: activala con `BUDGET_LOCAL_API=1`. Usa los tokens P1 en `Authorization: Bearer`, permisos por acción y propuestas existentes, estado/cambios con cursor, escrituras condicionadas a una base y lotes secuenciales. Sin CORS por defecto. [Contrato v1, límites, política de versiones y ejemplos curl](docs/api-local.md); [OpenAPI 3.1 generado del catálogo y esquemas compartidos](docs/openapi.v1.json). No incluye SSE, webhooks ni conectores nuevos.
 
 ### Exportación financiera para otros workflows
 

@@ -1,18 +1,20 @@
 import { saveCredential } from "./credentials.js";
 import { installedAgentConfig } from "./agent-config.js";
+import { createLocalApi } from "./local-api.js";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { openBudget, today } from "./core.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export function createApp(budget, { installationRoots } = {}) {
+export function createApp(budget, { installationRoots, localApi = process.env.BUDGET_LOCAL_API === "1" } = {}) {
   const app = express(),
     csrf = randomBytes(32).toString("hex"),
     previews = new Map();
   app.disable("x-powered-by");
   app.set("view engine", "ejs");
   app.set("views", path.join(root, "views"));
+  app.use("/api/v1", createLocalApi(budget, { enabled: localApi }));
   app.use((req, res, next) => {
     const host = req.headers.host || "";
     if (!/^127\.0\.0\.1:\d+$/.test(host))

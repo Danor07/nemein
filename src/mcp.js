@@ -2,6 +2,7 @@ import { readAgentToken } from "./credentials.js";
 import { readFileSync } from "node:fs";
 import { execute } from "./commands.js";
 import { actions } from "./actions.js";
+import { descriptors } from "./action-schemas.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -38,101 +39,6 @@ const out = (fn) => async (p) => {
     };
   }
 };
-const month = { month: z.string().optional() };
-const id = z.number().int().positive(),
-  amount = z.number().int();
-const descriptors = [
-  [
-    "exportar_presupuesto",
-    "export",
-    { format: z.enum(["json", "csv"]).optional() },
-  ],
-  ["presupuesto", "snapshot", month],
-  ["reportes", "reports", month],
-  ["resumen", "overview", month],
-  [
-    "buscar_movimientos",
-    "search",
-    {
-      ...month,
-      query: z.string().optional(),
-      account_id: id.optional(),
-      category_id: id.optional(),
-    },
-  ],
-  ["metas", "goals", month],
-  ["recurrentes", "recurring", {}],
-  [
-    "analizar_gastos",
-    "cube",
-    {
-      from: z.string(),
-      to: z.string(),
-      dimensions: z
-        .array(z.enum(["month", "day", "category", "account", "payee"]))
-        .min(1)
-        .max(3)
-        .optional(),
-    },
-  ],
-  ["snapshot_eventos", "event-snapshot", month],
-  [
-    "eventos",
-    "events",
-    { after: z.string().max(1024), limit: id.max(1000).optional() },
-  ],
-  [
-    "crear_cuenta",
-    "account",
-    {
-      name: z.string(),
-      type: z.enum(["corriente", "credito", "efectivo"]),
-      balance: amount,
-      date: z.string(),
-    },
-  ],
-  ["crear_categoria", "category", { name: z.string(), group_id: id }],
-  [
-    "transferir",
-    "transfer",
-    { from: id, to: id, amount: amount.positive(), date: z.string() },
-  ],
-  [
-    "guardar_meta",
-    "goal-set",
-    { category_id: id, amount: amount.positive(), due_date: z.string() },
-  ],
-  [
-    "crear_recurrente",
-    "recurring-create",
-    {
-      account_id: id,
-      category_id: id.optional(),
-      payee: z.string(),
-      amount,
-      next_date: z.string(),
-      frequency: z.enum(["weekly", "monthly", "yearly"]),
-    },
-  ],
-  ["registrar_vencimiento", "recurring-post", { id, due_date: z.string() }],
-  ["activar_recurrente", "recurring-toggle", { id, active: z.boolean() }],
-  [
-    "registrar_movimiento",
-    "transaction",
-    {
-      account_id: id,
-      date: z.string(),
-      payee: z.string(),
-      amount,
-      category_id: id.optional(),
-    },
-  ],
-  [
-    "asignar_presupuesto",
-    "allocate",
-    { month: z.string(), category_id: id, amount },
-  ],
-];
 const metadata = {
   _request_id: z.string().max(100).optional(),
   _base: z.string().max(1024).optional(),

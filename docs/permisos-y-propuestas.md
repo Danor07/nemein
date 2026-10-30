@@ -2,6 +2,8 @@
 
 Las interfaces CLI y MCP comparten el catálogo de src/actions.js y la política de src/access.js. La versión 0.2.0 requiere un token por conexión; las variables antiguas BUDGET_MCP_WRITE y BUDGET_EVENTS_READ no conceden acceso.
 
+La [API local v1](api-local.md), optativa con `BUDGET_LOCAL_API=1`, comparte esa fachada protegida. Usa Bearer y añade una condición de base obligatoria para las escrituras, comprobada dentro de la transacción del motor. No habilita permisos ni administración de conexiones. Las condiciones antiguas de CLI/MCP se conservan; no se intercambian IDs de reintento entre solicitudes con y sin esa condición.
+
 ## Conectar un cliente
 
 En **Permisos y propuestas**, creá una conexión y guardá su configuración. La credencial se guarda en un archivo privado; renovarla invalida el token anterior. Elegí permitir, preguntar o negar para cada acción. Sin una regla vigente, el pedido se niega.
