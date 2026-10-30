@@ -30,7 +30,7 @@ function headers(options = {}) {
 }
 
 test("Header contract rejects ambiguous representations at exact boundaries", () => {
-  assert.equal(apiVersion, "1.0.0");
+  assert.equal(apiVersion, "1.1.0");
   assert.deepEqual(apiLimits, { bodyBytes: 12000000, calls: 16 });
   assert.deepEqual(checkApiHeaders(headers()), {
     token: "a".repeat(64),
@@ -81,6 +81,7 @@ test("Header contract rejects ambiguous representations at exact boundaries", ()
     "Nemein-Connection-Version",
     "Content-Type",
     "Content-Encoding",
+    "Last-Event-ID",
   ]) {
     const duplicate = headers();
     duplicate.rawHeaders.push(name, "x", name, "y");
@@ -265,6 +266,7 @@ test("Transport errors classify domain failures and redact implementation errors
     ],
     [413, ["BODY_TOO_LARGE"]],
     [415, ["UNSUPPORTED_MEDIA_TYPE"]],
+    [429, ["STREAM_LIMIT"]],
     [500, ["INTERNAL_ERROR"]],
     [
       400,

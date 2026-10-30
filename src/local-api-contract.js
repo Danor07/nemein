@@ -3,8 +3,15 @@ import { z } from "zod";
 import { actions, connectionActions } from "./actions.js";
 import { actionShapes } from "./action-schemas.js";
 
-export const apiVersion = "1.0.0";
+export const apiVersion = "1.1.0";
 export const apiLimits = Object.freeze({ bodyBytes: 12000000, calls: 16 });
+export const sseLimits = Object.freeze({
+  streams: 8,
+  eventsPerTurn: 100,
+  pollMs: 1000,
+  heartbeatMs: 15000,
+  frameBytes: 65536,
+});
 export const apiActions = Object.freeze({ ...actions, ...connectionActions });
 export const apiFailure = (code, message) =>
   Object.assign(new Error(message), { code });
@@ -89,6 +96,7 @@ export function checkApiHeaders(req) {
     "nemein-connection-version",
     "content-type",
     "content-encoding",
+    "last-event-id",
   ];
   const names = req.rawHeaders
     .filter((_, i) => i % 2 === 0)
@@ -150,6 +158,7 @@ export function errorStatus(code) {
     return 409;
   if (code === "BODY_TOO_LARGE") return 413;
   if (code === "UNSUPPORTED_MEDIA_TYPE") return 415;
+  if (code === "STREAM_LIMIT") return 429;
   if (code === "INTERNAL_ERROR") return 500;
   return 400;
 }

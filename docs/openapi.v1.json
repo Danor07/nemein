@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "Nemein local API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Opt-in loopback API. See api-local.md for limits, cursors, retries and deprecation (at least 90 days and two stable releases)."
   },
   "servers": [
@@ -5288,6 +5288,159 @@
           },
           "415": {
             "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/stream": {
+      "get": {
+        "operationId": "eventStream",
+        "summary": "Continuous protected events, resumed from a P4a cursor.",
+        "x-nemein-action": "events",
+        "x-nemein-stream-limits": {
+          "streams": 8,
+          "eventsPerTurn": 100,
+          "pollMs": 1000,
+          "heartbeatMs": 15000,
+          "frameBytes": 65536
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Nemein-Connection-Version",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,40}$",
+              "default": "1"
+            },
+            "description": "P1 connection version, independent of API and action versions."
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "description": "Snapshot cursor on first connection; last processed event cursor on reconnect. Duplicates are rejected. Never a CloudEvents id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UTF-8 SSE. budget-event has id=cursor and JSON data matching event-stream. Heartbeat comments have no id. stream-error carries a sanitized Error without id, then closes. Persist after processing and deduplicate source+id. Slow consumers are disconnected; reconnect from the persisted cursor. Continuous events require allow; permissions are checked throughout.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-nemein-record-schema": {
+                  "$ref": "#/components/schemas/event-stream"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "STREAM_LIMIT: too many simultaneous event streams.",
             "content": {
               "application/json": {
                 "schema": {

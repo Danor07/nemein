@@ -61,7 +61,7 @@ test("Generated OpenAPI is current, covers only catalogs, and all schema referen
     document,
   );
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "1.0.0");
+  assert.equal(document.info.version, "1.1.0");
   assert.deepEqual(
     Object.keys(document.paths).sort(),
     [
@@ -69,10 +69,34 @@ test("Generated OpenAPI is current, covers only catalogs, and all schema referen
       ...Object.keys(connectionActions),
       "calls",
       "openapi.json",
+      "events/stream",
     ]
       .map((a) => "/api/v1/" + a)
       .sort(),
   );
   const compile = schemaValidator(document);
   for (const name of Object.keys(document.components.schemas)) compile(name);
+  const stream = document.paths["/api/v1/events/stream"].get;
+  assert.equal(stream.operationId, "eventStream");
+  assert.equal(stream["x-nemein-action"], "events");
+  assert.deepEqual(stream["x-nemein-stream-limits"], {
+    streams: 8,
+    eventsPerTurn: 100,
+    pollMs: 1000,
+    heartbeatMs: 15000,
+    frameBytes: 65536,
+  });
+  assert.deepEqual(stream.parameters[1], {
+    in: "header",
+    name: "Last-Event-ID",
+    required: true,
+    schema: document.components.schemas["event-stream"].properties.cursor,
+    description:
+      "Snapshot cursor on first connection; last processed event cursor on reconnect. Duplicates are rejected. Never a CloudEvents id.",
+  });
+  assert.deepEqual(stream.responses[200].content["text/event-stream"], {
+    schema: { type: "string" },
+    "x-nemein-record-schema": { $ref: "#/components/schemas/event-stream" },
+  });
+  assert.ok(stream.responses[429]);
 });
