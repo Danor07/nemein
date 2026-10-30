@@ -136,11 +136,15 @@ export async function apiFixture(t, enabled = true) {
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(async () => {
-    app.locals.closeLocalApi();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    budget.close();
-    rmSync(dir, { recursive: true, force: true });
+    // A failed shutdown must not leave the listener keeping the test process alive.
+    try {
+      app.locals.closeLocalApi();
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+      budget.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   const port = server.address().port;
   function send(action, body = { arguments: {} }, options = {}) {
