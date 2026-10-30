@@ -47,3 +47,5 @@ coverage/
 
 credential-*/
 P9C-HANDOFF.md
+src-tauri/patches/glib/Cargo.lock
+src-tauri/patches/glib/target/

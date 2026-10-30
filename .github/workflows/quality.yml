@@ -106,3 +106,23 @@ jobs:
         run: |
           $nemeinVersion = (Get-Content package.json | ConvertFrom-Json).version
           ./scripts/smoke-installed.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe"
+
+  linux-native:
+    name: Linux native check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+      - name: Patched glib string iterator
+        run: cargo test --manifest-path src-tauri/patches/glib/Cargo.toml --lib test_variant_iter_array
+      - name: Desktop shell compiles on Linux
+        run: |
+          mkdir -p desktop-resources/runtime
+          touch desktop-resources/runtime/.keep
+          cargo check --manifest-path src-tauri/Cargo.toml --locked
