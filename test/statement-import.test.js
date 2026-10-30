@@ -19,21 +19,7 @@ const reject = (content, code, format = "ofx", extra) =>
     typeof code === "string" ? { code } : code,
   );
 
-test("Statement limits accept the exact boundary and reject the next byte, element, row, depth or tag character", () => {
-  // At the limit the size check passes and the content fails on its first token.
-  const exactBytes = "x".repeat(5000000);
-  reject(exactBytes, "IMPORT_INVALID_STATEMENT");
-  reject(
-    Buffer.from(exactBytes).toString("base64"),
-    "IMPORT_INVALID_STATEMENT",
-    "ofx",
-    { content_encoding: "base64" },
-  );
-  reject(exactBytes + "x", {
-    code: "IMPORT_LIMIT",
-    message: "El extracto supera 5 MB.",
-  });
-  reject(ofx().padEnd(3000000, "é"), "IMPORT_LIMIT");
+test("Statement depth and tag limits accept the boundary and reject the next level or character", () => {
   const atDepth = (n) =>
     ofx().replace(
       "<OFX>",
@@ -50,22 +36,6 @@ test("Statement limits accept the exact boundary and reject the next byte, eleme
   reject(ofx().replace("<OFX>", tag.replace('">', 'x">')), {
     code: "IMPORT_LIMIT",
     message: "Etiqueta de extracto demasiado larga.",
-  });
-  const plain = ofx();
-  const elements = plain.match(/<[A-Za-z]/g).length;
-  const exactNodes = plain.replace(
-    "</OFX>",
-    "<Extra/>".repeat(250000 - elements) + "</OFX>",
-  );
-  assert.equal(parse(exactNodes).entries.length, 1);
-  reject(exactNodes.replace("</OFX>", "<Extra/></OFX>"), "IMPORT_LIMIT");
-  const entries = Array.from({ length: 20000 }, (_, i) =>
-    ofxRow({ id: String(i), amount: "1", date: "20261002", payee: "Fixture" }),
-  );
-  assert.equal(parse(ofx(entries.join(""))).entries.length, 20000);
-  reject(ofx(entries.join("") + entries[0]), {
-    code: "IMPORT_LIMIT",
-    message: "Máximo 20.000 filas por importación.",
   });
 });
 
@@ -398,19 +368,7 @@ test("Markup is bounded, structurally complete and rejects declarations, referen
     reject(content + "<extra/>", "IMPORT_INVALID_STATEMENT", format);
     reject(content + "garbage", "IMPORT_INVALID_STATEMENT", format);
   }
-  reject("x".repeat(5000001), "IMPORT_LIMIT");
-  reject(
-    "!".repeat(6666672),
-    { code: "IMPORT_LIMIT", message: "El extracto supera 5 MB." },
-    "ofx",
-    {
-      content_encoding: "base64",
-    },
-  );
-  reject(Buffer.alloc(5000001), "IMPORT_LIMIT");
   reject("<a>".repeat(65) + "</a>".repeat(65), "IMPORT_LIMIT");
-  reject("<a>" + "<b/>".repeat(250000) + "</a>", "IMPORT_LIMIT");
-  reject(ofx(ofxRow().repeat(20001)), "IMPORT_LIMIT");
   reject("<a " + " ".repeat(5000) + "/>", "IMPORT_LIMIT");
   for (const content of [
     "",

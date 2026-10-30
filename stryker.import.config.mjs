@@ -25,6 +25,7 @@ export default {
     "!test/import-contract.test.js",
     "!test/import-csv.test.js",
     "!test/statement-import.test.js",
+    "!test/statement-limits.test.js",
     "!test/statement-workflow.test.js",
     "!test/fixtures/statements.js",
     "!test/properties/statement-import.property.test.js",
