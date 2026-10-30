@@ -1,11 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
-import Ajv2020 from "ajv/dist/2020.js";
 import { apiFixture } from "./helpers/local-api.js";
+import { schemaValidator } from "./helpers/openapi-schemas.js";
 import { generateOpenApi } from "../src/openapi.js";
-import { actions, connectionActions } from "../src/actions.js";
 import { apiLimits } from "../src/local-api-contract.js";
 
 const envelope = (args) => ({ arguments: args });
@@ -556,52 +554,14 @@ test("State/changes retain P4a cursor semantics and explicit export permission",
   assert.equal(exported.cursor, page.cursor);
 });
 
-test("Generated OpenAPI is current, covers only catalogs, and all schema references resolve", async (t) => {
+test("The served OpenAPI document and batch results match the published schemas", async (t) => {
   const document = generateOpenApi();
-  assert.deepEqual(
-    JSON.parse(
-      readFileSync(new URL("../docs/openapi.v1.json", import.meta.url), "utf8"),
-    ),
-    document,
-  );
-  assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "1.0.0");
-  assert.deepEqual(
-    Object.keys(document.paths).sort(),
-    [
-      ...Object.keys(actions),
-      ...Object.keys(connectionActions),
-      "calls",
-      "openapi.json",
-    ]
-      .map((a) => "/api/v1/" + a)
-      .sort(),
-  );
-  const ajv = new Ajv2020({ strict: true });
-  // These annotations do not affect validation of the data envelopes.
-  ajv.addFormat("date-time", (value) => Number.isFinite(Date.parse(value)));
-  ajv.addFormat(
-    "uri-reference",
-    (value) => typeof value === "string" && value.length > 0,
-  );
-  ajv.addSchema({
-    $id: "urn:nemein:api-test",
-    $defs: JSON.parse(
-      JSON.stringify(document.components.schemas).replaceAll(
-        "#/components/schemas/",
-        "#/$defs/",
-      ),
-    ),
-  });
-  for (const name of Object.keys(document.components.schemas))
-    ajv.compile({ $ref: "urn:nemein:api-test#/$defs/" + name });
+  const compile = schemaValidator(document);
   const { send } = await apiFixture(t);
   const wire = await send("openapi.json", {}, { method: "GET" });
   assert.equal(wire.status, 200);
   assert.deepEqual(wire.body, document);
-  const batchResult = ajv.compile({
-    $ref: "urn:nemein:api-test#/$defs/BatchResult",
-  });
+  const batchResult = compile("BatchResult");
   const batch = await send("calls", {
     calls: [
       { id: "denied", action: "snapshot", arguments: {} },
@@ -609,4 +569,30 @@ test("Generated OpenAPI is current, covers only catalogs, and all schema referen
     ],
   });
   assert.ok(batchResult(batch.body), JSON.stringify(batchResult.errors));
+});
+
+test("Routing, encoding and defaults keep the API closed outside its exact contract", async (t) => {
+  const byDefault = await apiFixture(t, null);
+  code(await byDefault.send("permissions"), "API_DISABLED", 404);
+  const { send, budget, connection, rule } = await apiFixture(t);
+  code(await send("Permissions"), "NOT_FOUND", 404);
+  code(await send("permissions/"), "NOT_FOUND", 404);
+  const identity = await send(
+    "permissions",
+    { arguments: {} },
+    { headers: { "Content-Encoding": "identity" } },
+  );
+  assert.equal(identity.status, 200);
+  const denied = await send("snapshot");
+  code(denied, "PERMISSION_DENIED", 403);
+  assert.equal(denied.headers["www-authenticate"], undefined);
+  rule("group");
+  const agent = budget.forAgent(connection.token);
+  const write = (base) =>
+    agent.request("group", { name: "Fixture" }, { base, requireBase: true });
+  assert.throws(() => write("a".repeat(1025)), { code: "BASE_REQUIRED" });
+  assert.throws(
+    () => write("a".repeat(1024)),
+    (error) => error.code !== "BASE_REQUIRED",
+  );
 });

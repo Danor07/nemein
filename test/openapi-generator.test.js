@@ -11,6 +11,9 @@ import {
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { generateOpenApi } from "../src/openapi.js";
+import { actions, connectionActions } from "../src/actions.js";
+import { schemaValidator } from "./helpers/openapi-schemas.js";
 
 test("OpenAPI generation is reproducible and --check rejects drift without rewriting the artifact", (t) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "nemein-openapi-generator-"));
@@ -47,4 +50,29 @@ test("OpenAPI generation is reproducible and --check rejects drift without rewri
   assert.equal(readFileSync(file, "utf8"), expected);
   assert.equal(run().status, 0);
   assert.equal(readFileSync(file, "utf8"), expected);
+});
+
+test("Generated OpenAPI is current, covers only catalogs, and all schema references resolve", () => {
+  const document = generateOpenApi();
+  assert.deepEqual(
+    JSON.parse(
+      readFileSync(new URL("../docs/openapi.v1.json", import.meta.url), "utf8"),
+    ),
+    document,
+  );
+  assert.equal(document.openapi, "3.1.0");
+  assert.equal(document.info.version, "1.0.0");
+  assert.deepEqual(
+    Object.keys(document.paths).sort(),
+    [
+      ...Object.keys(actions),
+      ...Object.keys(connectionActions),
+      "calls",
+      "openapi.json",
+    ]
+      .map((a) => "/api/v1/" + a)
+      .sort(),
+  );
+  const compile = schemaValidator(document);
+  for (const name of Object.keys(document.components.schemas)) compile(name);
 });

@@ -74,9 +74,22 @@ test("Header contract rejects ambiguous representations at exact boundaries", ()
     () => checkApiHeaders(headers({ origin: "" })),
     coded("INVALID_ORIGIN"),
   );
-  const duplicate = headers();
-  duplicate.rawHeaders.push("aUtHoRiZaTiOn", "Bearer " + "b".repeat(64));
-  assert.throws(() => checkApiHeaders(duplicate), coded("INVALID_REQUEST"));
+  for (const name of [
+    "aUtHoRiZaTiOn",
+    "Host",
+    "Origin",
+    "Nemein-Connection-Version",
+    "Content-Type",
+    "Content-Encoding",
+  ]) {
+    const duplicate = headers();
+    duplicate.rawHeaders.push(name, "x", name, "y");
+    assert.throws(() => checkApiHeaders(duplicate), coded("INVALID_REQUEST"));
+  }
+  assert.throws(
+    () => checkApiHeaders({ ...headers(), url: "/permissions?x=1" }),
+    coded("INVALID_REQUEST"),
+  );
   assert.doesNotThrow(() => checkApiHeaders(headers({ "x-extra": "allowed" })));
 });
 
@@ -101,10 +114,14 @@ test("Envelope and batch bounds are strict, without coercion, defaults or partia
     { ...value, request_id: "" },
     { ...value, request_id: "a/b" },
     { ...value, request_id: 1 },
+    { ...value, extra: true },
   ])
     assert.throws(() => validateEnvelope(invalid), coded("INVALID_REQUEST"));
   const call = { id: "i".repeat(100), action: "a".repeat(64), arguments: {} };
   assert.doesNotThrow(() => validateBatch({ calls: [call] }));
+  assert.doesNotThrow(() =>
+    validateBatch({ calls: [call, { ...call, id: "other" }] }),
+  );
   for (const batch of [
     null,
     [],
@@ -117,6 +134,9 @@ test("Envelope and batch bounds are strict, without coercion, defaults or partia
     { calls: [{ ...call, action: "" }] },
     { calls: [{ ...call, id: "" }] },
     { calls: [{ ...call, id: 1 }] },
+    { calls: [{ action: call.action, arguments: {} }] },
+    { calls: [{ id: call.id, arguments: {} }] },
+    { calls: [{ id: call.id, action: call.action }] },
   ])
     assert.throws(() => validateBatch(batch), coded("INVALID_REQUEST"));
   let invoked = false;
@@ -194,6 +214,23 @@ test("Action contracts retain integer types and invoke the scoped facade with st
     }),
     { ok: true, result: "own" },
   );
+  assert.deepEqual(
+    await executeApiBatch(
+      { request: () => "done" },
+      {
+        calls: [{ id: "one", action: "group", arguments: { name: "Fixture" } }],
+      },
+    ),
+    {
+      results: [{ id: "one", action: "group", ok: true, result: "done" }],
+    },
+  );
+  const rejected = await executeApiCall(
+    { request: () => assert.fail("Invalid arguments reached the facade") },
+    "group",
+    { arguments: { name: 1 } },
+  );
+  assert.equal(rejected.error.code, "INVALID_ARGUMENTS");
   const failure = await executeApiCall(
     {
       request: async () => {

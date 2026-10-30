@@ -14,7 +14,7 @@ export async function apiFixture(t, enabled = true) {
   const budget = openBudget(dir);
   const connection = budget.createConnection({ label: "HTTP fixture" });
   const server = createApp(budget, {
-    localApi: enabled,
+    ...(enabled === null ? {} : { localApi: enabled }),
     installationRoots: [],
   }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
