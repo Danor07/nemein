@@ -1,6 +1,6 @@
 # Contrato de importación v1
 
-Un lote describe movimientos para revisar antes de confirmar. El primer productor es el CSV incorporado; sus comandos, permisos, errores, previsualización, deduplicación y resultados se conservan. Validar un lote no autoriza escrituras. CLI/MCP y la interfaz HTTP del propietario siguen pasando por `import-preview`/`import`, el motor de permisos y las propuestas existentes.
+Un lote describe movimientos para revisar antes de confirmar. Los productores incorporados son CSV, OFX y CAMT.053; sus comandos, permisos, previsualización, deduplicación y resultados comparten el mismo recorrido. Validar un lote no autoriza escrituras. CLI/MCP y la interfaz HTTP del propietario siguen pasando por `import-preview`/`import`, el motor de permisos y las propuestas existentes.
 
 Esquema: [import-batch.v1.schema.json](../src/contracts/import-batch.v1.schema.json), JSON Schema 2020-12, `$id: urn:nemein:schema:import-batch:1`. `version: 1` identifica el formato; un cambio incompatible tendrá otro número y esquema. Los campos desconocidos se rechazan. Ajv compila en modo estricto, sin coerción, eliminación de propiedades ni valores por defecto.
 
@@ -71,6 +71,50 @@ No hay una lista de errores dentro de un lote v1 ni importaciones parciales. Los
 
 [Vectores compartidos](../test/fixtures/import-vectors.json): `valid` contiene `{name,batch}` y `invalid` contiene `{name,code,batch}`. Un conector futuro puede probar su salida contra el esquema y la semántica anteriores; un validador compatible debe aceptar todos los válidos y rechazar cada inválido con el código indicado. Ejecución de referencia: `node --test test/import-contract.test.js`. Propiedades y fuzzing usan semillas fijas; `npm run quality` incluye la mutación de decisiones nuevas en `stryker.import.config.mjs`, mínimo 90 %, sin timeouts, errores ni falta de cobertura.
 
-P15 publica el formato y el productor CSV interno. No agrega una acción pública que acepte JSON arbitrario ni concede capacidades nuevas. Los futuros adaptadores deben integrar previsualización y confirmación mediante acciones explícitas protegidas; el validador no accede a SQLite, red ni permisos. El presupuesto funciona sin conectores.
+P15 publica el formato y el productor CSV interno; P8 incorpora OFX y CAMT.053 como productores puros. No agrega una acción pública que acepte lotes JSON arbitrarios ni concede capacidades nuevas. El validador y los parsers no acceden a SQLite, red ni permisos. El presupuesto funciona sin conectores.
 
-No se persisten lotes, procedencia ni cobertura y no se requieren migraciones SQL: las identidades usan `transactions.import_key` existente. No se puede demostrar cobertura completa de extractos con este formato en memoria. Persistencia/reanudación, comprobantes/adjuntos, conciliación con movimientos manuales, otras monedas, transferencias automáticas, WASM, OFX/camt.053, JMAP y la API HTTP abierta quedan para sus entregas específicas.
+No se persisten lotes, procedencia ni cobertura y no se requieren migraciones SQL: las identidades usan `transactions.import_key` existente. No se puede demostrar cobertura completa de extractos con este formato en memoria. Persistencia/reanudación, comprobantes/adjuntos, conciliación con movimientos manuales, otras monedas, transferencias automáticas, WASM y JMAP quedan fuera de esta entrega.
+
+## Extractos estándar (P8, primera entrega)
+
+En la pantalla de importación, elegí el formato, archivo, cuenta local de destino y categoría inicial. OFX/CAMT no necesitan mapear columnas. La vista previa y el botón de confirmación son los mismos del CSV; al confirmar se vuelve a parsear y validar dentro de la transacción existente. Un error de lectura, fila o identidad repetida rechaza el archivo completo, sin movimientos, memoria, mapeo ni eventos parciales. Un identificador ya registrado en otra importación aparece como duplicado y se omite, incluso si el banco cambió su descripción o importe. No se actualiza el movimiento existente. Importar un extracto no toca el mapeo CSV guardado de la cuenta.
+
+CLI/MCP y API local mantienen `import-preview` e `import`, con `account_id`, `content` y `config`. `config.format` admite `csv` (predeterminado), `ofx` o `camt053`; un formato desconocido se rechaza. Para enviar bytes originales, usar `config.content_encoding: "base64"` y `content` en base64 canónico. La UI lo hace para ambos formatos estándar. CLI lee el JSON de `--file` o `--stdin`, no un extracto crudo. Ejemplo ficticio del sobre, preparando `content` con los bytes de un archivo local:
+
+```js
+const request = {
+  account_id: 1,
+  content: bytes.toString("base64"),
+  config: { format: "ofx", content_encoding: "base64", category_id: 1 },
+};
+// nemein.cmd import-preview --file solicitud.json
+// Revisar antes de pedir import con el mismo sobre y los metadatos de propuesta.
+```
+
+El lote se produce en `src/statement-import.js`; categorías por memoria/configuración, permisos, propuestas, deduplicación contra SQLite y confirmación siguen a cargo del anfitrión. No hay dependencias nuevas, WASM, conectores de bancos ni cambios de esquemas/acciones públicas. CSV conserva sus claves históricas mediante `importIdentity` compartido, así como sus errores de fila.
+
+### Perfil admitido
+
+- OFX 1.x SGML (`OFXHEADER:100`, `DATA:OFXSGML`, sin seguridad/compresión) con hojas cerradas u omitidas, y OFX 2.x XML. Una sola cuenta/extracto bancario `STMTRS` o de tarjeta `CCSTMTRS` por archivo. Se exige `ACCTID`; se consideran `BANKID`, `BRANCHID` y `ACCTTYPE` al identificar la fuente. `DTPOSTED` conserva su día escrito sin conversión horaria; `TRNAMT` determina el signo; descripción desde `NAME`, `PAYEE/NAME` o `MEMO`, en ese orden. En OFX 1.x el cuerpo empieza en `<OFX>`, haya o no línea en blanco tras el encabezado. `DTSTART`/`DTEND` se conservan como período declarado, o `null` si faltan ambos.
+- OFX 1.x respeta `ENCODING:USASCII` con `CHARSET:1252`, `ISO-8859-1` o `NONE` (ASCII estricto), y `ENCODING:UTF-8`/`UNICODE` para UTF-8. Un charset desconocido o bytes inválidos falla explícitamente. Texto Unicode ya decodificado con caracteres no ASCII y encabezado de charset legado se rechaza: enviar bytes/base64. XML admite UTF-8 y rechaza otras codificaciones declaradas.
+- CAMT usa el espacio de nombres `urn:iso:std:iso:20022:tech:xsd:camt.053.001.NN`, con prefijo o predeterminado, un `BkToCstmrStmt/Stmt` y cuenta `IBAN` u `Othr/Id` con emisor opcional. Produce **una entrada por `Ntry`**, sin repartir ni recalcular totales de sus operaciones internas. Cada `Ntry` debe tener estado `BOOK` en `Sts` o `Sts/Cd`; un movimiento pendiente, informativo o sin estado rechaza el archivo. `Amt/@Ccy` debe ser PYG; si existe `Acct/Ccy`, también. `CRDT` suma y `DBIT` resta, incluso en reversiones: no se invierte el signo otra vez. Se exige fecha contable `BookgDt/Dt` o `DtTm`, conservando su día escrito; no se sustituye por fecha valor. `FrToDt` se conserva si existe; no se infiere cobertura de las entradas.
+- CAMT toma la descripción de `AddtlNtryInf`; si falta, de una única `NtryDtls/TxDtls`: nombre del acreedor/deudor según el signo (directo o bajo `Pty`), `AddtlTxInf` o textos `RmtInf/Ustrd`. Sin descripción o con detalle ambiguo se rechaza; no se inventa un beneficiario. Extractos con varias cuentas deben separarse fuera de Nemein. No se valida el XSD completo ni se promete admitir toda extensión de un banco.
+- Sólo guaraníes enteros distintos de cero dentro del límite v1. La notación estándar `120.00` es exacta y se acepta; cualquier fracción no nula, exponente o separador local se rechaza, aunque `Number` pudiera redondearla. Nunca se cambia moneda ni escala a centavos. OFX con `CURRENCY`/`ORIGCURRENCY` se rechaza por requerir interpretación adicional.
+
+### Identidad y seguridad
+
+Con referencia externa, `id` es SHA-256 UTF-8 de `JSON.stringify([format, account_id, sourceHash, externalId])`. `sourceHash` es SHA-256 del identificador de cuenta del extracto: OFX `[BANKID,BRANCHID,ACCTID,ACCTTYPE]`, CAMT `[IBAN u Othr/Id, Othr/Issr o ""]`. No contiene posición de fila, versión de parser, descripción, importe ni período. OFX usa `FITID`; CAMT usa `AcctSvcrRef` de `Ntry` o, si falta, `NtryRef`. Referencias repetidas dentro del archivo producen `IMPORT_DUPLICATE_ID`, incluso si sus importes difieren.
+
+Si no hay referencia, se reutiliza **el algoritmo histórico CSV documentado arriba**, contando ocurrencias entre las filas sin referencia. Es una identidad por contenido, no una referencia bancaria: cambiar descripción/importe cambia la clave, y extractos parciales con hechos idénticos siguen siendo ambiguos. Revisarlos antes de confirmar. No se inventan referencias ni se agregan identidades aleatorias.
+
+El parser es puro, acotado y no resuelve recursos externos. Máximos: **5.000.000 bytes originales**, base64 de hasta 6.666.668 caracteres antes de decodificar, **20.000 entradas**, **64 niveles**, **250.000 elementos** y **4.096 caracteres por etiqueta**. Tokeniza incrementalmente; los bucles recorren secuencias finitas y no usan cursores como condición de avance. Se rechazan DOCTYPE, declaraciones de entidades, referencias numéricas o propias, CDATA y comentarios. Sólo se decodifican, una vez, las cinco entidades predefinidas de XML (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`). En OFX 1.x SGML no hay DTD posible, así que un `&` suelto se conserva como texto. No se elimina contenido para hacer pasar un archivo. Cierre incompleto, múltiples raíces, campos únicos repetidos o estructura ambigua fallan antes de producir el lote.
+
+Los errores de productor llevan `code`: `IMPORT_FORMAT`, `IMPORT_CHARSET`, `IMPORT_LIMIT`, `IMPORT_UNSAFE_XML`, `IMPORT_INVALID_STATEMENT`, `IMPORT_CURRENCY`, `IMPORT_AMOUNT` y `IMPORT_INVALID_DATE`. Los errores por entrada agregan `Fila N` y preservan `cause`/`code`; después se aplican los códigos del contrato v1. La UI conserva su presentación de mensajes y los transportes su sobre de errores existente.
+
+### Pruebas y revisión
+
+Las muestras de `test/fixtures/statements.js` son ficticias y escritas a mano. Regresión en `test/statement-import.test.js`, flujo protegido en `test/statement-workflow.test.js`, lector UI en `test/import-ui.test.js` (DOM simulado, sin afirmar revisión visual) y CLI/MCP/HTTP en `test/import-transports.test.js`. Propiedades y fuzzing de extractos usan semillas fijas. Un worker prueba etiquetas/base64 patológicos con un plazo de 2,5 s y termina siempre en `finally`; una prueba adicional verifica la guarda con un worker bloqueado intencionalmente. Así una regresión o mutante que bloquee esos casos falla como aserción antes del plazo externo de Stryker. Esto no sustituye medir los mutantes: `npm run mutation:import` mantiene el umbral 90 y el gate rechaza Timeout, error y NoCoverage. En esta entrega la ejecución de mutación y el commit quedan a cargo del revisor por instrucción expresa.
+
+Los cinco factores: utilidad (extractos sin mapear columnas), responsabilidad (parser puro → contrato; anfitrión → dominio), contrato (v1 y errores anteriores), pruebas de frontera (regresión/PBT/fuzz/alcance de mutación) y desconexión (CSV y presupuesto siguen operando sin usar estos formatos). No hay persistencia nueva ni dependencias opcionales que condicionen abrir el presupuesto.
+
+Referencias de formato: [OFX Banking 2.3, FDX](https://financialdataexchange.org/common/Uploaded%20files/OFX%20files/OFX%20Banking%20Specification%20v2.3.pdf) y [Bank-to-Customer Cash Management, ISO 20022](https://www.iso20022.org/sites/default/files/documents/messages/mdr_part_2/ISO20022_MDRPart2_BankToCustomerCashManagement_2018_2019_v1_0.pdf). El perfil anterior delimita lo implementado, no sustituye esas especificaciones.

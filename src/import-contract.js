@@ -1,9 +1,24 @@
 import Ajv2020 from "ajv/dist/2020.js";
 import schema from "./contracts/import-batch.v1.schema.json" with { type: "json" };
 import { date } from "./date.js";
+import { createHash } from "node:crypto";
 
 const validate = new Ajv2020({ strict: true }).compile(schema);
 const fail = (code, message) => Object.assign(new Error(message), { code });
+// Shared legacy fallback: identical facts retain their occurrence-based CSV identity.
+export function importIdentity(accountId, date, payee, amount, occurrences) {
+  const canonical = JSON.stringify([
+    Number(accountId),
+    date,
+    payee.toLocaleLowerCase("es"),
+    amount,
+  ]);
+  const occurrence = (occurrences.get(canonical) || 0) + 1;
+  occurrences.set(canonical, occurrence);
+  return createHash("sha256")
+    .update(canonical + "#" + occurrence)
+    .digest("hex");
+}
 function importDate(value) {
   try {
     date(value);

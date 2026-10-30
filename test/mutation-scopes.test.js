@@ -8,7 +8,10 @@ test("CI runs every mutation scope and the local gate runs the same ones", () =>
     .filter((name) => name.startsWith("mutation:"))
     .map((name) => name.slice("mutation:".length));
   const ci = readFileSync(".github/workflows/quality.yml", "utf8");
-  const matrix = /^\s+scope: \[(.+)\]$/m.exec(ci)[1].split(", ");
+  const matrix = /^\s+scope:\s+\[([^\]]+)\]/m.exec(ci)[1]
+    .trim()
+    .replace(/,$/, "")
+    .split(/\s*,\s*/);
   assert.deepEqual(matrix, scopes);
   assert.equal(
     scripts["test:mutation"],

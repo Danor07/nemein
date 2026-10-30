@@ -328,6 +328,8 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
         }
         case "preview": {
           const config = {
+            ...(p.format ? { format: p.format } : {}),
+            ...(p.content_encoding ? { content_encoding: p.content_encoding } : {}),
             date: p.dateColumn,
             payee: p.payeeColumn,
             amount: p.amountColumn,

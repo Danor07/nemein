@@ -22,6 +22,7 @@ payee?.addEventListener("change", () => {
 });
 const file = document.querySelector("#csv-file"),
   separator = document.querySelector("#csv-delimiter");
+const importFormat = document.querySelector("#import-format");
 let csvText = "";
 function headers(text, sep) {
   const fields = [];
@@ -51,7 +52,18 @@ function refresh() {
     select.value = select.dataset.saved || "";
   });
 }
-file?.addEventListener("change", async () => {
+let fileRead = 0;
+async function readImportFile() {
+  const current = ++fileRead;
+  const standard = importFormat.value !== "csv";
+  document.querySelectorAll("[data-csv-option]").forEach((label) => {
+    label.style.display = standard ? "none" : "";
+    label.querySelector("select").disabled = standard;
+  });
+  document.querySelector("#csv-content").value = "";
+  document.querySelector("#import-content-encoding").value = standard ? "base64" : "";
+  const button = document.querySelector("#csv-form button");
+  button.disabled = false;
   const f = file.files[0];
   if (!f) return;
   if (f.size > 5e6) {
@@ -60,12 +72,33 @@ file?.addEventListener("change", async () => {
       "El archivo supera 5 MB.";
     return;
   }
-  csvText = await f.text();
-  document.querySelector("#csv-content").value = csvText;
-  refresh();
-  document.querySelector("#csv-message").textContent =
-    "Archivo leído. Revisá el mapeo antes de continuar.";
-});
+  button.disabled = true;
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    if (current !== fileRead) return;
+    if (standard) {
+      // Keep original bytes: the server reads the OFX charset before decoding.
+      const chunks = [];
+      for (let offset = 0; offset < bytes.length; offset += 8192)
+        chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
+      document.querySelector("#csv-content").value = btoa(chunks.join(""));
+    } else {
+      csvText = new TextDecoder("utf-8").decode(bytes);
+      document.querySelector("#csv-content").value = csvText;
+      refresh();
+    }
+    document.querySelector("#csv-message").textContent = standard
+      ? "Archivo leído. Revisá la cuenta y categoría antes de continuar."
+      : "Archivo leído. Revisá el mapeo antes de continuar.";
+  } catch {
+    if (current === fileRead)
+      document.querySelector("#csv-message").textContent = "No se pudo leer el archivo. Volvé a seleccionarlo e intentá de nuevo.";
+  } finally {
+    if (current === fileRead) button.disabled = false;
+  }
+}
+file?.addEventListener("change", readImportFile);
+importFormat?.addEventListener("change", readImportFile);
 separator?.addEventListener("change", refresh);
 const report = document.querySelector("#report-data");
 if (report && typeof Chart !== "undefined") {
