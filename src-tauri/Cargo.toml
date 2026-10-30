@@ -11,3 +11,8 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+
+# glib 0.18 keeps the GHSA-wrw7-89jp-8q8g unsound iterator and wry pins gtk 0.18, which
+# cannot reach the fixed glib 0.20. Remove this once wry moves to a newer gtk.
+[patch.crates-io]
+glib = { path = "patches/glib" }
