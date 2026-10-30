@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { apiFixture } from "./helpers/local-api.js";
+import { apiFixture, apiDeadline, openApiStream } from "./helpers/local-api.js";
 import { schemaValidator } from "./helpers/openapi-schemas.js";
 import { generateOpenApi } from "../src/openapi.js";
 import { apiLimits } from "../src/local-api-contract.js";
@@ -15,7 +15,9 @@ const code = (response, expected, status) => {
 };
 
 test("Production startup enables HTTP explicitly and closes with the native parent", async (t) => {
-  const { dir, connection } = await apiFixture(t, false);
+  const { dir, connection, budget, rule } = await apiFixture(t, false);
+  rule("events");
+  const cursor = budget.eventSnapshot().cursor;
   const child = spawn(process.execPath, ["src/server.js"], {
     env: {
       ...process.env,
@@ -32,6 +34,7 @@ test("Production startup enables HTTP explicitly and closes with the native pare
     errors += chunk;
   });
   const exited = new Promise((resolve) => child.once("exit", resolve));
+  let stream;
   try {
     const url = await new Promise((resolve, reject) => {
       const timer = setTimeout(
@@ -67,9 +70,22 @@ test("Production startup enables HTTP explicitly and closes with the native pare
     });
     assert.equal(response.status, 200);
     assert.equal((await response.json()).result.connection_id, connection.id);
+    stream = await openApiStream(
+      Number(new URL(url).port),
+      connection.token,
+      cursor,
+    );
+    await stream.waitFor((frames) =>
+      frames.some((f) => f.raw === ": connected"),
+    );
   } finally {
     child.stdin.end();
-    assert.equal(await exited, 0, errors);
+    try {
+      assert.equal(await apiDeadline(exited, () => child.kill()), 0, errors);
+      if (stream) await apiDeadline(stream.finished, stream.close);
+    } finally {
+      stream?.close();
+    }
   }
 });
 

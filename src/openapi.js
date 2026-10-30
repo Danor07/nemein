@@ -4,6 +4,7 @@ import {
   apiActions,
   apiLimits,
   apiVersion,
+  sseLimits,
   argumentSchemas,
   envelopeSchema,
   batchSchema,
@@ -217,6 +218,42 @@ export function generateOpenApi() {
           content: content({ type: "object" }),
         },
         ...errors,
+      },
+    },
+  };
+  paths["/api/v1/events/stream"] = {
+    get: {
+      operationId: "eventStream",
+      summary: "Continuous protected events, resumed from a P4a cursor.",
+      "x-nemein-action": "events",
+      "x-nemein-stream-limits": sseLimits,
+      parameters: [
+        ...parameters,
+        {
+          in: "header",
+          name: "Last-Event-ID",
+          required: true,
+          schema: cursor,
+          description:
+            "Snapshot cursor on first connection; last processed event cursor on reconnect. Duplicates are rejected. Never a CloudEvents id.",
+        },
+      ],
+      responses: {
+        200: {
+          description:
+            "UTF-8 SSE. budget-event has id=cursor and JSON data matching event-stream. Heartbeat comments have no id. stream-error carries a sanitized Error without id, then closes. Persist after processing and deduplicate source+id. Slow consumers are disconnected; reconnect from the persisted cursor. Continuous events require allow; permissions are checked throughout.",
+          content: {
+            "text/event-stream": {
+              schema: { type: "string" },
+              "x-nemein-record-schema": ref("event-stream"),
+            },
+          },
+        },
+        ...errors,
+        429: {
+          description: "STREAM_LIMIT: too many simultaneous event streams.",
+          content: content(ref("Error")),
+        },
       },
     },
   };

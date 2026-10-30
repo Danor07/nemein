@@ -8,9 +8,9 @@ export default {
     "src/access.js:64-76",
     "src/access.js:600-600",
     "src/access.js:418-441",
-    "src/server.js:185-199",
-    "src/server.js:234-261",
-    "src/server.js:382-382",
+    "src/server.js:187-201",
+    "src/server.js:236-263",
+    "src/server.js:384-384",
   ],
   testRunner: "command",
   commandRunner: {

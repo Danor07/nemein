@@ -14,7 +14,9 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
   app.disable("x-powered-by");
   app.set("view engine", "ejs");
   app.set("views", path.join(root, "views"));
-  app.use("/api/v1", createLocalApi(budget, { enabled: localApi }));
+  const api = createLocalApi(budget, { enabled: localApi });
+  app.locals.closeLocalApi = api.closeStreams;
+  app.use("/api/v1", api);
   app.use((req, res, next) => {
     const host = req.headers.host || "";
     if (!/^127\.0\.0\.1:\d+$/.test(host))
@@ -408,6 +410,7 @@ export async function start() {
   timer.unref();
   const stop = () => {
     clearInterval(timer);
+    app.locals.closeLocalApi();
     server.close(() => {
       budget.close();
       process.exit(0);

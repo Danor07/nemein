@@ -1,6 +1,6 @@
 # API local v1
 
-La primera porción de P9c expone las acciones existentes por HTTP, con los mismos permisos, propuestas, auditoría y reglas del presupuesto que CLI/MCP. Es optativa: iniciá Nemein con `BUDGET_LOCAL_API=1`. Comparte el proceso y puerto de la interfaz, que escucha sólo en `127.0.0.1`. Al desactivarla, UI, CLI y MCP siguen funcionando.
+P9c expone las acciones existentes por HTTP y sus eventos por SSE, con los mismos permisos, propuestas, auditoría y reglas del presupuesto que CLI/MCP. Es optativa: iniciá Nemein con `BUDGET_LOCAL_API=1`. Comparte el proceso y puerto de la interfaz, que escucha sólo en `127.0.0.1`. Al desactivarla, UI, CLI y MCP siguen funcionando.
 
 La URL aparece en la salida de arranque como `BUDGET_URL=http://127.0.0.1:PUERTO`. Agregá `/api/v1`. No hay un puerto fijo de API; `PORT` permite fijar el del servidor local. Para desarrollar o probar, usá siempre `BUDGET_DATA_DIR` temporal con datos ficticios. No ejecutes los ejemplos sobre tu presupuesto personal.
 
@@ -14,7 +14,7 @@ Nemein-Connection-Version: 1
 Content-Type: application/json
 ```
 
-El segundo encabezado es opcional y su valor predeterminado es `1`: es la versión de la conexión, independiente de API v1 y de la revisión del catálogo. Renovar el token invalida el anterior; revocar la conexión o cambiar sus reglas afecta las llamadas posteriores. Una lectura iniciada puede terminar después de revocarse.
+El segundo encabezado es opcional y su valor predeterminado es `1`: es la versión de la conexión, independiente de API v1 y de la revisión del catálogo. Renovar el token invalida el anterior; revocar la conexión o cambiar sus reglas afecta las llamadas posteriores. Una lectura JSON iniciada puede terminar después de revocarse; SSE vuelve a comprobar permisos durante el flujo.
 
 No se aceptan credenciales por cookies, argumentos ni query string. Ninguna ruta admite query string. `Host` debe coincidir exactamente con `127.0.0.1:PUERTO` del socket. `Origin`, si aparece, debe coincidir exactamente con `http://127.0.0.1:PUERTO`, también para GET. No se confía en encabezados de proxy. No hay CORS ni preflight habilitado; un sitio remoto no tiene una excepción por conocer el token. Es protección contra solicitudes de navegador y DNS rebinding, no aislamiento frente a programas del mismo usuario del sistema.
 
@@ -23,6 +23,7 @@ No se aceptan credenciales por cookies, argumentos ni query string. Ninguna ruta
 | Método y ruta | Contrato |
 |---|---|
 | `GET /api/v1/openapi.json` | Documento generado, con autenticación |
+| `GET /api/v1/events/stream` | SSE de la acción `events`, con cursor obligatorio en `Last-Event-ID` |
 | `POST /api/v1/{action}` | Acción del catálogo o consulta de conexión ya disponible en CLI/MCP |
 | `POST /api/v1/calls` | Lote secuencial de esas mismas llamadas |
 
@@ -66,6 +67,47 @@ Usá un `request_id` único para cada escritura y conservá exactamente su acci�
 
 Con permiso `ask`, la respuesta correcta contiene `result.status: "pending"`, `proposal_id` y `request_id`. No repitas la mutación para aprobarla: consultá `proposal-status` con `arguments.id`. Sólo el propietario acepta, modifica o rechaza desde la bandeja. Al resolver se vuelven a comprobar permiso y base. Si se retiró el permiso de la respuesta, tampoco se entrega por esta consulta. [Permisos y propuestas](permisos-y-propuestas.md).
 
+## Eventos en vivo (SSE)
+
+`GET /api/v1/events/stream` requiere Bearer y una regla vigente `events: allow`. No concede otros permisos de lectura. `ask` devuelve `APPROVAL_REQUIRED` y termina, sin crear propuestas periódicas. `Last-Event-ID` es obligatorio incluso al conectar por primera vez: usá el cursor de un `event-snapshot` autorizado o el del último registro procesado. Se rechazan valores duplicados, malformados o de más de 1024 caracteres, y se comprueban presupuesto, posición y anclaje como en `events` y `watch`. No es el campo `id` de CloudEvents. No se admite cursor ni token en query string.
+
+El contenido es `text/event-stream; charset=utf-8`, según el [formato SSE](https://html.spec.whatwg.org/multipage/server-sent-events.html). Cada registro tiene este formato (los valores siguientes son ilustrativos):
+
+```text
+event: budget-event
+id: CURSOR_OPACO_DEL_EVENTO
+data: {"version":1,"cursor":"CURSOR_OPACO_DEL_EVENTO","event":{"specversion":"1.0","id":"evento-ficticio","source":"urn:nemein:budget:ejemplo","type":"io.nemein.budget.changed.v1","time":"2026-10-20T12:00:00.000Z","datacontenttype":"application/json","dataschema":"urn:nemein:schema:budget-changed:1","data":{"operation":"createGroup"}}}
+
+```
+
+El JSON es el mismo registro que entrega `watch`; los eventos no contienen todos los datos para reconstruir saldos. El `id` SSE es el cursor **de ese registro**, no el de una página posterior. Persistilo después de procesar y deduplicá por `event.source + event.id`. Al reconectar con ese `Last-Event-ID`, se obtiene el sufijo estricto pendiente. Un mensaje cortado o un procesamiento sin confirmar conserva el cursor anterior: puede repetirse y debe deduplicarse. El transporte no promete procesamiento exactamente una vez.
+
+El adaptador consulta las lecturas protegidas existentes cada segundo; también detecta cambios escritos por otro proceso. El aviso acelera; el cursor garantiza la recuperación. La auditoría registra la apertura y cada lectura que entrega un evento; la espera sin eventos comprueba autenticación y regla sin escribir filas, para que un flujo abierto no haga crecer la base. Se comprueban autenticación y permisos antes de cada lectura, incluso con el historial quieto. Una conexión revocada, token renovado, versión cambiada o regla reducida deja de recibir eventos como máximo en el siguiente turno de consulta. No se guardan páginas autorizadas entre turnos.
+
+Límites por instancia de API:
+
+- **8 flujos simultáneos** en total, entre todas las conexiones; el siguiente recibe HTTP 429 `STREAM_LIMIT`.
+- **100 registros por turno**, leyendo uno por vez; si queda historial, continúa en 1 ms y cede al resto del servidor.
+- **Latido cada 15 segundos** (`: heartbeat` seguido por línea vacía), sin datos financieros, ID ni avance del cursor.
+- **65536 bytes UTF-8 por trama**. Un registro mayor cierra con `STREAM_EVENT_TOO_LARGE`: consultá `POST events` para recuperarlo, sin saltar su cursor.
+- Si el transporte indica salida lenta (`write` devuelve false), el flujo se destruye inmediatamente. No hay cola propia ni espera ilimitada; reconectá desde el cursor persistido. Los buffers del transporte y un registro por flujo acotan la memoria del adaptador.
+
+Los errores previos a abrir son JSON con su estado HTTP. Después de abrir, `event: stream-error` lleva `data: {"ok":false,"error":{"code":"...","message":"..."}}`, **sin id**, y el flujo termina. Un cliente lento puede desconectarse sin recibir ese error final. No avances cursor por comentarios ni errores. Para autorización, corregí permisos antes de reconectar; para `CURSOR_MISMATCH`/`EVENT_HISTORY_GAP`, seguí la [recuperación P4a](eventos.md). No se reanuda desde «ahora» ni se salta historia automáticamente. Al apagar Nemein, se terminan los flujos y sus temporizadores antes de cerrar el presupuesto.
+
+El EventSource nativo de navegador no permite configurar Bearer. Usá un cliente que admita encabezados, como fetch con lector SSE o curl; no se habilitan cookies ni CORS para resolverlo.
+
+Con el presupuesto **temporal ficticio** del ejemplo de abajo, `TOKEN` y `BASE` obtenidos de esa instancia:
+
+```bash
+# BASE es el cursor real del snapshot ficticio, no el texto ilustrativo anterior.
+curl --no-buffer --fail-with-body --silent --show-error \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Last-Event-ID: $BASE" \
+  "$API/events/stream"
+```
+
+Al cortar con Ctrl+C, conservá el último cursor cuyo evento procesaste y usalo en `Last-Event-ID` al ejecutar de nuevo. Curl muestra las tramas; el procesamiento durable y la deduplicación corresponden al cliente. En Windows usá `curl.exe` y adaptá las variables al shell.
+
 ## Llamadas agrupadas
 
 ```json
@@ -83,7 +125,7 @@ El sobre completo y los IDs únicos se comprueban antes de la primera ejecución
 
 ## Versiones, códigos y límites
 
-Versión inicial: **1.0.0**, bajo `/api/v1`. La versión de Nemein y la de los formatos de importación/exportación son independientes. Cambios compatibles agregan campos u opciones y aumentan la versión menor; cambiar rutas, significado, tipos, unidades o códigos incompatiblemente requiere `/api/v2`. Los clientes toleran campos nuevos de respuesta, pero nunca convierten códigos desconocidos en éxito.
+Versión actual: **1.1.0** (agrega SSE), bajo `/api/v1`. La versión de Nemein y la de los formatos de importación/exportación son independientes. Cambios compatibles agregan campos u opciones y aumentan la versión menor; cambiar rutas, significado, tipos, unidades o códigos incompatiblemente requiere `/api/v2`. Los clientes toleran campos nuevos de respuesta, pero nunca convierten códigos desconocidos en éxito.
 
 Antes de retirar una versión habrá aviso público en esta documentación y notas de versión durante **al menos 90 días y dos versiones estables**, lo que dure más. Actualmente no hay versiones de API deprecadas.
 
@@ -97,6 +139,7 @@ Antes de retirar una versión habrá aviso público en esta documentación y not
 | 409 | `STATE_CONFLICT`, `PROPOSAL_CONFLICT`, `REQUEST_ID_REUSED`, `VERSION_MISMATCH`, `CURSOR_MISMATCH`, `EVENT_HISTORY_GAP` |
 | 413 | `BODY_TOO_LARGE` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` |
+| 429 | `STREAM_LIMIT` |
 | 500 | `INTERNAL_ERROR` |
 
 Límites del adaptador: JSON UTF-8 sin compresión, **12.000.000 bytes** por cuerpo y **16 llamadas** por lote. IDs de correlación ASCII únicos de 1 a 100 caracteres; nombres de acción hasta 64. `request_id` acepta letras ASCII, números, `_` y `-`, hasta 100; `purpose` hasta 500; `base` hasta 1024. Encabezados y tiempos quedan sujetos a los límites del servidor HTTP de Node. Se conservan los límites de cada acción (por ejemplo, importación CSV 5 MB/20.000 filas y exportación 5 MB/20.000 filas). No hay tope agregado de bytes de respuesta ni cuotas por conexión en esta porción; para exportar, preferí una llamada por petición.
@@ -150,4 +193,4 @@ npm.cmd start
 
 Este diseño adopta estado, cambios y llamadas agrupadas de [JMAP, RFC 8620](https://www.rfc-editor.org/rfc/rfc8620.html); no implementa el protocolo JMAP. La descripción usa [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0.html) y JSON Schema 2020-12.
 
-Quedan para otras porciones: SSE, webhooks P4b, conectores WASM/WIT P3, OFX/camt.053 P8, entrega de propuestas offline por HTTP, cuotas, orígenes configurables y clientes independientes adicionales de P9b. No se agregan migraciones SQL, sincronización remota ni una segunda implementación del dominio. Las escrituras pasan siempre por `forAgent`; el adaptador no recibe conexión SQLite.
+Quedan para otras porciones: webhooks P4b, conectores WASM/WIT P3, OFX/camt.053 P8, entrega de propuestas offline por HTTP, cuotas generales, orígenes configurables y clientes independientes adicionales de P9b. No se agregan migraciones SQL, sincronización remota ni una segunda implementación del dominio. Las escrituras pasan siempre por `forAgent`; el adaptador no recibe conexión SQLite.

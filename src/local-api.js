@@ -11,10 +11,13 @@ import {
   executeApiBatch,
 } from "./local-api-contract.js";
 import { generateOpenApi } from "./openapi.js";
+import { createEventStreams } from "./local-api-sse.js";
 
 export function createLocalApi(budget, { enabled = false } = {}) {
   const router = express.Router({ caseSensitive: true, strict: true });
   const document = generateOpenApi();
+  const streams = createEventStreams();
+  router.closeStreams = streams.close;
   router.use((req, res, next) => {
     res.set({
       "Cache-Control": "no-store",
@@ -35,6 +38,11 @@ export function createLocalApi(budget, { enabled = false } = {}) {
     if (req.method !== "GET")
       return next(apiFailure("METHOD_NOT_ALLOWED", "Use GET."));
     res.json(document);
+  });
+  router.all("/events/stream", (req, res, next) => {
+    if (req.method !== "GET")
+      return next(apiFailure("METHOD_NOT_ALLOWED", "Use GET."));
+    streams.open(res.locals.agent, req.headers["last-event-id"], res);
   });
   router.use((req, _res, next) => {
     if (req.method !== "POST")

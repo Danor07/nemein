@@ -710,6 +710,23 @@ export function attachAccess(budget) {
           actions: permissions,
         };
       });
+    // An idle stream polls this: only reads that may return data reach the audited path.
+    scoped.eventStreamState = (after) => {
+      const current = authenticate(token, version);
+      const args = { after, limit: 1 };
+      const { decision } = evaluatePolicy({
+        actor: current,
+        rule: ruleFor(current, "events"),
+        action: "events",
+        args,
+      });
+      return {
+        decision,
+        pending:
+          decision === "allow" &&
+          originals.events(...callArgs("events", args)).events.length > 0,
+      };
+    };
     scoped.proposalStatus = ({ id }) =>
       runAs(() => {
         authenticate(token, version);
