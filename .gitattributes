@@ -1,1 +1,2 @@
 *.yml text eol=lf
+src-tauri/patches/** linguist-vendored
