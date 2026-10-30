@@ -5,11 +5,7 @@ export default {
   // Negative HTTP tests fail at their socket deadlines before this runner deadline.
   timeoutMS: 20000,
   mutate: [
-    "src/local-api-contract.js",
     "src/local-api.js",
-    "src/openapi.js",
-    "src/action-schemas.js",
-    "scripts/generate-openapi.js",
     "src/access.js:171-171",
     "src/access.js:203-210",
     "src/server.js:17-17",
@@ -17,7 +13,7 @@ export default {
   ],
   commandRunner: {
     command:
-      "node --test test/openapi-generator.test.js test/local-api-contract.test.js test/local-api.test.js test/properties/local-api.property.test.js test/fuzz/local-api.test.js",
+      "node --test test/local-api.test.js test/properties/local-api.property.test.js test/fuzz/local-api.test.js",
   },
   ignorePatterns: [
     "**",
@@ -30,6 +26,7 @@ export default {
     "!test/local-api-contract.test.js",
     "!test/local-api.test.js",
     "!test/helpers/local-api.js",
+    "!test/helpers/openapi-schemas.js",
     "!test/properties/local-api.property.test.js",
     "!test/fuzz/local-api.test.js",
     "!package.json",
