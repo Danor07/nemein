@@ -1,9 +1,15 @@
 export default {
-  mutate: ["src/import-contract.js", "src/date.js", "src/core.js:324-333"],
+  mutate: [
+    "src/import-contract.js",
+    "src/date.js",
+    "src/core.js:244-247",
+    "src/core.js:306-330",
+    "src/core.js:346-346",
+  ],
   testRunner: "command",
   commandRunner: {
     command:
-      "node --test test/import-contract.test.js test/import-csv.test.js test/properties/import.property.test.js test/fuzz/import.test.js",
+      "node --test test/import-contract.test.js test/import-csv.test.js test/statement-workflow.test.js test/properties/import.property.test.js test/fuzz/import.test.js",
   },
   coverageAnalysis: "off",
   concurrency: 2,
@@ -18,6 +24,12 @@ export default {
     "!src/**",
     "!test/import-contract.test.js",
     "!test/import-csv.test.js",
+    "!test/statement-import.test.js",
+    "!test/statement-limits.test.js",
+    "!test/statement-workflow.test.js",
+    "!test/fixtures/statements.js",
+    "!test/properties/statement-import.property.test.js",
+    "!test/fuzz/statement-import.test.js",
     "!test/fixtures/import-vectors.json",
     "!test/properties/import.property.test.js",
     "!test/fuzz/import.test.js",

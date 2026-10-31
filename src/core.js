@@ -7,7 +7,8 @@ import Database from "better-sqlite3";
 import { planning } from "./planning.js";
 import { date } from "./date.js";
 export { date } from "./date.js";
-import { csvImportBatch } from "./import-contract.js";
+import { csvImportBatch, importIdentity } from "./import-contract.js";
+import { statementImportBatch } from "./statement-import.js";
 
 import {
   mkdirSync,
@@ -18,7 +19,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { createHash } from "node:crypto";
 import { parse } from "csv-parse/sync";
 
 export const today = () => {
@@ -241,6 +241,10 @@ export function openBudget(dir = defaultDir()) {
   }
   function csvPreview(content, cfg, accountId) {
     account(accountId);
+    if (cfg.format !== undefined && cfg.format !== "csv") {
+      const batch = statementImportBatch(content, cfg, Number(accountId));
+      return projectImport([], batch, cfg);
+    }
     if (Buffer.byteLength(content) > 5e6) throw Error("El CSV supera 5 MB.");
     const delimiter = cfg.delimiter || ",";
     if (![",", ";", "\t"].includes(delimiter))
@@ -289,27 +293,8 @@ export function openBudget(dir = defaultDir()) {
         const amount = money(a);
         if (!amount) throw Error("Importe cero.");
         const payee = text(r[pi]);
-        const cat =
-          amount < 0
-            ? one(
-                "SELECT category_id FROM memory WHERE payee=?",
-                payee.toLocaleLowerCase("es"),
-              )?.category_id ||
-              (cfg.category_id ? category(cfg.category_id) : null)
-            : null;
-        if (amount < 0 && !cat)
-          throw Error("Elegí una categoría inicial para gastos sin memoria.");
-        const canonical = JSON.stringify([
-          Number(accountId),
-          d,
-          payee.toLocaleLowerCase("es"),
-          amount,
-        ]);
-        const occurrence = (occurrences.get(canonical) || 0) + 1;
-        occurrences.set(canonical, occurrence);
-        const key = createHash("sha256")
-          .update(canonical + "#" + occurrence)
-          .digest("hex");
+        const cat = amount < 0 ? importCategory({ payee }, cfg) : null;
+        const key = importIdentity(accountId, d, payee, amount, occurrences);
         return {
           date: d,
           payee,
@@ -322,14 +307,26 @@ export function openBudget(dir = defaultDir()) {
       }
     });
     const batch = csvImportBatch(Number(accountId), rows);
+    return projectImport(headers, batch, cfg);
+  }
+  function projectImport(headers, batch, cfg) {
     return {
       headers,
       rows: batch.entries.map(({ id, ...row }) => ({
         ...row,
+        category_id: row.amount < 0 ? importCategory(row, cfg) : null,
         import_key: id,
         duplicate: !!one("SELECT id FROM transactions WHERE import_key=?", id),
       })),
     };
+  }
+  function importCategory(row, cfg) {
+    const cat = row.category_id || one(
+      "SELECT category_id FROM memory WHERE payee=?",
+      row.payee.toLocaleLowerCase("es"),
+    )?.category_id || (cfg.category_id ? category(cfg.category_id) : null);
+    if (!cat) throw Error("Elegí una categoría inicial para gastos sin memoria.");
+    return cat;
   }
   function importCsv(p) {
     return db.transaction(() => {
@@ -345,11 +342,13 @@ export function openBudget(dir = defaultDir()) {
         );
         added++;
       }
-      run(
-        "INSERT INTO mappings VALUES (?,?) ON CONFLICT(account_id) DO UPDATE SET config=excluded.config",
-        Number(p.account_id),
-        JSON.stringify(p.config),
-      );
+      // A statement has no columns to remember and must not replace the CSV mapping.
+      if ((p.config.format ?? "csv") === "csv")
+        run(
+          "INSERT INTO mappings VALUES (?,?) ON CONFLICT(account_id) DO UPDATE SET config=excluded.config",
+          Number(p.account_id),
+          JSON.stringify(p.config),
+        );
       return { added, duplicates: preview.rows.length - added };
     })();
   }
