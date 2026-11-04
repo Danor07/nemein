@@ -36,7 +36,7 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, FALSE, HANDLE,
-    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, S_OK, TRUE, WAIT_OBJECT_0,
+    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, S_OK, TRUE, WAIT_ABANDONED, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Security::Authorization::{
     GetEffectiveRightsFromAclW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
@@ -68,11 +68,12 @@ use windows_sys::Win32::System::SystemServices::{
     JOB_OBJECT_MSG_JOB_MEMORY_LIMIT, JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
-    InitializeProcThreadAttributeList, OpenProcessToken, ResumeThread, TerminateProcess,
-    UpdateProcThreadAttribute, WaitForSingleObject, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-    DETACHED_PROCESS, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
-    PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY,
+    CreateMutexW, CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
+    GetExitCodeProcess, InitializeProcThreadAttributeList, OpenProcessToken, ReleaseMutex,
+    ResumeThread, TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, DETACHED_PROCESS, EXTENDED_STARTUPINFO_PRESENT,
+    LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+    PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY,
     PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
     PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
     STARTF_USESTDHANDLES, STARTUPINFOEXW,
@@ -228,8 +229,34 @@ pub fn container_sid() -> Result<ContainerSid, String> {
     profile_sid(APPCONTAINER_NAME)
 }
 
+/// Holds the per-user lock on profile registration; released on drop.
+struct Registration(Owned);
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        unsafe { ReleaseMutex((self.0).0) };
+    }
+}
+
+/// Serializes profile registration across the threads and processes of this
+/// user. Two first runs at once made CreateAppContainerProfile fail
+/// (0x8007000a), and a CreateProcessW running meanwhile missed the
+/// half-registered profile (error 2).
+fn lock_registration() -> Result<Registration, String> {
+    let name = wide("Local\\Nemein.ConnectorWorker.Registration");
+    let mutex = owned(
+        unsafe { CreateMutexW(null(), FALSE, name.as_ptr()) },
+        "CreateMutexW",
+    )?;
+    match unsafe { WaitForSingleObject(mutex.0, 10_000) } {
+        WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Registration(mutex)),
+        _ => Err("otro proceso no terminó de registrar el AppContainer".into()),
+    }
+}
+
 /// The SID of the AppContainer profile `name`, registering it if needed.
 pub fn profile_sid(name: &str) -> Result<ContainerSid, String> {
+    let _registration = lock_registration()?;
     let name = wide(name);
     let display = wide("Nemein: conectores encerrados");
     let description = wide("Ejecuta conectores WASM de Nemein sin capacidades.");
