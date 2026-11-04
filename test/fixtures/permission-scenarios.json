@@ -1,0 +1,2520 @@
+{
+  "format": "nemein-permission-scenarios",
+  "version": 1,
+  "scenarios": [
+    {
+      "name": "authentication",
+      "description": "No rule denies; bad, revoked, rotated and outdated credentials fail before any rule is read.",
+      "steps": [
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "deny"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "token": "invalid",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "AUTH_REQUIRED",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "overview",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "ok",
+          "result": "<read>",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rotate",
+            "conn": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-rotate",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "token": "previous",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "AUTH_REQUIRED",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "ok",
+          "result": "<read>",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "version",
+            "conn": "agent",
+            "version": "2"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-version",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "version": "1",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "VERSION_MISMATCH",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "deny"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "overview",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "ok",
+          "result": "<read>",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "revoke",
+            "conn": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-revoke",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "AUTH_REQUIRED",
+          "audit": [],
+          "transactions": 0
+        }
+      ]
+    },
+    {
+      "name": "idempotency",
+      "description": "A request_id replays its stored result, rejects other input, and never outranks a deny.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "r1"
+            }
+          },
+          "outcome": "ok",
+          "result": 1,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "r1"
+            }
+          },
+          "outcome": "ok",
+          "result": 1,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -6
+            },
+            "meta": {
+              "request_id": "r1"
+            }
+          },
+          "outcome": "error",
+          "code": "REQUEST_ID_REUSED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "bad id!"
+            }
+          },
+          "outcome": "error",
+          "code": "INVALID_REQUEST_ID",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "deny"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "r1"
+            }
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "deny"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -7
+            },
+            "meta": {
+              "request_id": "r2"
+            }
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "deny"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -7
+            },
+            "meta": {
+              "request_id": "r2"
+            }
+          },
+          "outcome": "ok",
+          "result": 2,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 2
+        }
+      ]
+    },
+    {
+      "name": "proposals",
+      "description": "Ask stores a proposal without writing; the owner accepts, modifies or rejects it once.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "other"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b1"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "p1"
+            }
+          },
+          "outcome": "error",
+          "code": "PURPOSE_REQUIRED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "p1",
+              "purpose": "Gasto"
+            }
+          },
+          "outcome": "error",
+          "code": "BASE_REQUIRED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "p1",
+              "purpose": "Gasto",
+              "base": "$b1"
+            },
+            "as": "accept-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "accept-me",
+            "request_id": "p1",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "request_id": "p1",
+              "purpose": "Gasto",
+              "base": "$b1"
+            }
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "uuid#3",
+            "request_id": "p1",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "accept-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#3",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "p1",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b1",
+            "purpose": "Gasto",
+            "status": "pending",
+            "created_at": "<time>",
+            "final_args": null,
+            "result": null,
+            "reason": null,
+            "resolved_at": null,
+            "conflict": false,
+            "delivery": "delivered"
+          },
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "other",
+            "proposal": "accept-me"
+          },
+          "outcome": "error",
+          "code": "PROPOSAL_NOT_FOUND",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "accept-me",
+            "decision": "accept"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "accepted",
+            "result": 1
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "accepted"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "accept-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#3",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "p1",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b1",
+            "purpose": "Gasto",
+            "status": "accepted",
+            "created_at": "<time>",
+            "final_args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "result": 1,
+            "reason": "",
+            "resolved_at": "<time>",
+            "conflict": false,
+            "delivery": "responded"
+          },
+          "audit": [],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "accept-me",
+            "decision": "accept"
+          },
+          "outcome": "error",
+          "code": "PROPOSAL_CLOSED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b2"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$b2"
+            },
+            "as": "modify-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "modify-me",
+            "request_id": "uuid#6",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "modify-me",
+            "decision": "modify",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -3
+            }
+          },
+          "outcome": "error",
+          "code": "REASON_REQUIRED",
+          "audit": [],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "modify-me",
+            "decision": "modify",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -3
+            },
+            "reason": "Importe corregido"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "modified",
+            "result": 2
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "modified"
+            }
+          ],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "modify-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#5",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "uuid#6",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b2",
+            "purpose": "Gasto",
+            "status": "modified",
+            "created_at": "<time>",
+            "final_args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -3
+            },
+            "result": 2,
+            "reason": "Importe corregido",
+            "resolved_at": "<time>",
+            "conflict": false,
+            "delivery": "responded"
+          },
+          "audit": [],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b3"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$b3"
+            },
+            "as": "reject-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "reject-me",
+            "request_id": "uuid#9",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "reject-me",
+            "decision": "reject"
+          },
+          "outcome": "error",
+          "code": "REASON_REQUIRED",
+          "audit": [],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "reject-me",
+            "decision": "reject",
+            "reason": "No corresponde"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "rejected"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "rejected"
+            }
+          ],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "reject-me"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#8",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "uuid#9",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b3",
+            "purpose": "Gasto",
+            "status": "rejected",
+            "created_at": "<time>",
+            "final_args": null,
+            "result": null,
+            "reason": "No corresponde",
+            "resolved_at": "<time>",
+            "conflict": false,
+            "delivery": "responded"
+          },
+          "audit": [],
+          "transactions": 2
+        }
+      ]
+    },
+    {
+      "name": "base",
+      "description": "A proposal is applied only on the state it saw; conditional writes check the base under the write lock.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "seen"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$seen"
+            },
+            "as": "stale"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "stale",
+            "request_id": "uuid#3",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "owner",
+            "method": "allocate",
+            "args": {
+              "month": "2026-10",
+              "category_id": 1,
+              "amount": 10
+            }
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "allocate",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "stale"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#2",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "uuid#3",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$seen",
+            "purpose": "Gasto",
+            "status": "pending",
+            "created_at": "<time>",
+            "final_args": null,
+            "result": null,
+            "reason": null,
+            "resolved_at": null,
+            "conflict": true,
+            "delivery": "delivered"
+          },
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "stale",
+            "decision": "accept"
+          },
+          "outcome": "error",
+          "code": "PROPOSAL_CONFLICT",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "stale"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#2",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "uuid#3",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$seen",
+            "purpose": "Gasto",
+            "status": "pending",
+            "created_at": "<time>",
+            "final_args": null,
+            "result": null,
+            "reason": null,
+            "resolved_at": null,
+            "conflict": true,
+            "delivery": "delivered"
+          },
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "eyJ2ZXJzaW9uIjoxLCJzb3VyY2UiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDAiLCJzZXF1ZW5jZSI6MCwiaWQiOm51bGx9"
+            }
+          },
+          "outcome": "error",
+          "code": "CURSOR_MISMATCH",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "requireBase": true
+            }
+          },
+          "outcome": "error",
+          "code": "BASE_REQUIRED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "requireBase": true,
+              "base": "$seen"
+            }
+          },
+          "outcome": "error",
+          "code": "STATE_CONFLICT",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "requireBase": true,
+              "base": "eyJ2ZXJzaW9uIjoxLCJzb3VyY2UiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDAiLCJzZXF1ZW5jZSI6MCwiaWQiOm51bGx9"
+            }
+          },
+          "outcome": "error",
+          "code": "CURSOR_MISMATCH",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "now"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "requireBase": true,
+              "base": "$now"
+            }
+          },
+          "outcome": "ok",
+          "result": 1,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "requireBase": true,
+              "base": "$now"
+            }
+          },
+          "outcome": "error",
+          "code": "STATE_CONFLICT",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        }
+      ]
+    },
+    {
+      "name": "revocation",
+      "description": "Permissions are re-read on every request, on acceptance and on reading an answered proposal.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b1"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$b1"
+            },
+            "as": "withdrawn"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "withdrawn",
+            "request_id": "uuid#3",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "deny"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "withdrawn",
+            "decision": "accept"
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "withdrawn",
+            "decision": "accept"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "accepted",
+            "result": 1
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "accepted"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "withdrawn"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#2",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "uuid#3",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b1",
+            "purpose": "Gasto",
+            "status": "accepted",
+            "created_at": "<time>",
+            "final_args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "result": 1,
+            "reason": "",
+            "resolved_at": "<time>",
+            "conflict": false,
+            "delivery": "responded"
+          },
+          "audit": [],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "deny"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "withdrawn"
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b2"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$b2"
+            },
+            "as": "revoked"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "revoked",
+            "request_id": "uuid#6",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "revoke",
+            "conn": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-revoke",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "revoked",
+            "decision": "accept"
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "versioned"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "versioned",
+            "action": "transaction",
+            "decision": "ask"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b3"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "versioned",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "meta": {
+              "purpose": "Gasto",
+              "base": "$b3"
+            },
+            "as": "old-version"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "old-version",
+            "request_id": "uuid#9",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "versioned",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "version",
+            "conn": "versioned",
+            "version": "2"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-version",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "versioned",
+            "proposal": "old-version"
+          },
+          "outcome": "error",
+          "code": "PROPOSAL_NOT_FOUND",
+          "audit": [],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "resolve",
+            "proposal": "old-version",
+            "decision": "accept"
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "versioned",
+              "action": "transaction",
+              "decision": "error"
+            }
+          ],
+          "transactions": 1
+        }
+      ]
+    },
+    {
+      "name": "conditions",
+      "description": "Amount and account limits fall back to ask or deny; actions without that field reject the rule.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "account",
+            "as": "bank"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow",
+            "conditions": {
+              "max_amount": 100,
+              "otherwise": "ask"
+            }
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -100
+            }
+          },
+          "outcome": "ok",
+          "result": 1,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b1"
+          }
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -101
+            },
+            "meta": {
+              "purpose": "Gasto grande",
+              "base": "$b1"
+            }
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "uuid#2",
+            "request_id": "uuid#3",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "ask"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow",
+            "conditions": {
+              "account_id": "$cash"
+            }
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 1
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            }
+          },
+          "outcome": "ok",
+          "result": 2,
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$bank",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            }
+          },
+          "outcome": "error",
+          "code": "PERMISSION_DENIED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "deny"
+            }
+          ],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "overview",
+            "decision": "allow",
+            "conditions": {
+              "max_amount": 1
+            }
+          },
+          "outcome": "error",
+          "code": "INVALID_RULE",
+          "audit": [],
+          "transactions": 2
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow",
+            "conditions": {
+              "otherwise": "allow"
+            }
+          },
+          "outcome": "error",
+          "code": "INVALID_RULE",
+          "audit": [],
+          "transactions": 2
+        }
+      ]
+    },
+    {
+      "name": "offline-and-async",
+      "description": "Delivered envelopes never apply by themselves; asynchronous backups never wait for approval.",
+      "steps": [
+        {
+          "step": {
+            "op": "account",
+            "as": "cash"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "account",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "transaction",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "base",
+            "as": "b1"
+          }
+        },
+        {
+          "step": {
+            "op": "envelope",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b1",
+            "purpose": "Gasto sin conexión",
+            "request_id": "e1",
+            "as": "delivered"
+          },
+          "outcome": "ok",
+          "result": {
+            "status": "pending",
+            "proposal_id": "delivered",
+            "request_id": "e1",
+            "delivery": "delivered"
+          },
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "transaction",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "status",
+            "conn": "agent",
+            "proposal": "delivered"
+          },
+          "outcome": "ok",
+          "result": {
+            "id": "uuid#2",
+            "actor": "agent",
+            "connection_version": "1",
+            "request_id": "e1",
+            "action": "transaction",
+            "action_version": 1,
+            "args": {
+              "account_id": 1,
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "base": "$b1",
+            "purpose": "Gasto sin conexión",
+            "status": "pending",
+            "created_at": "<time>",
+            "final_args": null,
+            "result": null,
+            "reason": null,
+            "resolved_at": null,
+            "conflict": false,
+            "delivery": "delivered"
+          },
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "envelope",
+            "conn": "agent",
+            "action": "transaction",
+            "args": {
+              "account_id": "$cash",
+              "date": "2026-10-24",
+              "payee": "Fixture",
+              "category_id": 1,
+              "amount": -5
+            },
+            "purpose": "Sin base",
+            "request_id": "e2"
+          },
+          "outcome": "error",
+          "code": null,
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "backup",
+            "decision": "ask"
+          },
+          "outcome": "error",
+          "code": "INVALID_RULE",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "backup",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "backup",
+            "decision": "allow",
+            "conditions": {
+              "otherwise": "ask"
+            }
+          },
+          "outcome": "error",
+          "code": "INVALID_RULE",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "envelope",
+            "conn": "agent",
+            "action": "backup",
+            "args": {},
+            "purpose": "Respaldo",
+            "request_id": "e3"
+          },
+          "outcome": "error",
+          "code": null,
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "backup",
+            "args": {},
+            "meta": {
+              "purpose": "Respaldo",
+              "forceProposal": true
+            }
+          },
+          "outcome": "error",
+          "code": "ASYNC_PROPOSAL_UNSUPPORTED",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "backup",
+              "decision": "error"
+            }
+          ],
+          "transactions": 0
+        }
+      ]
+    },
+    {
+      "name": "restoration",
+      "description": "Restoring a copy restores the connections, rules and revocations stored in it.",
+      "steps": [
+        {
+          "step": {
+            "op": "connect",
+            "as": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-create",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rule",
+            "conn": "agent",
+            "action": "overview",
+            "decision": "allow"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "permission-set",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "copy",
+            "as": "before"
+          },
+          "outcome": "ok",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "rotate",
+            "conn": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-rotate",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "revoke",
+            "conn": "agent"
+          },
+          "outcome": "ok",
+          "audit": [
+            {
+              "actor": "owner",
+              "action": "connection-revoke",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "AUTH_REQUIRED",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "restore",
+            "from": "before"
+          },
+          "outcome": "ok",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "error",
+          "code": "AUTH_REQUIRED",
+          "audit": [],
+          "transactions": 0
+        },
+        {
+          "step": {
+            "op": "request",
+            "conn": "agent",
+            "token": "previous",
+            "action": "overview",
+            "args": {
+              "month": "2026-10"
+            }
+          },
+          "outcome": "ok",
+          "result": "<read>",
+          "audit": [
+            {
+              "actor": "agent",
+              "action": "overview",
+              "decision": "allow"
+            }
+          ],
+          "transactions": 0
+        }
+      ]
+    }
+  ]
+}

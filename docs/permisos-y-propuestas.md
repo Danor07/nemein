@@ -52,3 +52,11 @@ Las conexiones, reglas, decisiones, solicitudes y propuestas se guardan en SQLit
 El esquema usa [migraciones numeradas](migraciones.md), transaccionales e idempotentes. Restaurar un backup restaura también los permisos y revocaciones de ese momento: revisalos antes de reconectar clientes. La interfaz muestra las cien decisiones recientes y pagina las propuestas de a cincuenta; los registros anteriores permanecen en la base.
 
 Estos controles autorizan registros locales. No ejecutan pagos bancarios ni revierten hechos ocurridos fuera de Nemein.
+
+## Escenarios de máquina de estados
+
+`test/fixtures/permission-scenarios.json` amplía los vectores de `evaluatePolicy` con la puerta completa: autenticación, idempotencia, propuestas, base, revocación, condiciones, sobres sin conexión, respaldos asíncronos y restauración. Sirve de oráculo para otra implementación (ADR-0003).
+
+Formato `nemein-permission-scenarios` versión 1: cada escenario tiene `name`, `description` y `steps`. Cada paso conserva su entrada (`step`) y lo que hizo el motor real: `outcome` (`ok` o `error`), `code` del error (o `null` si el error no tiene código), `result`, las filas de auditoría que agregó (`actor`, `action`, `decision`) y la cantidad de movimientos después del paso. Los pasos `base` sólo capturan el cursor. Los identificadores, tokens, cursores y horas se reemplazan por alias estables, y el contenido de una lectura se registra como `<read>`.
+
+Las operaciones están definidas en `test/helpers/permission-scenarios.js`. Para regenerar el archivo, ejecutar `node scripts/permission-scenarios.js`. `test/permission-scenarios.test.js` vuelve a ejecutar cada escenario y falla si el motor ya no coincide con el archivo.
