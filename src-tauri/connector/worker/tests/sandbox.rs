@@ -157,10 +157,14 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
         );
     }
     let _ = std::fs::remove_file(writable.join("probe-wrote-here.txt"));
+    // The control's connection is waiting in the backlog; take it, so the
+    // enclosed run is judged on its own.
+    drop(listener.accept().unwrap());
 
     // Positive control for the enclosure report: the probe can tell an
     // AppContainer and the mitigations apart.
     assert_eq!(control["token"]["appcontainer"], 0, "control: {control}");
+    assert_eq!(control["token"]["lpac"], 0, "control: {control}");
     assert_eq!(control["mitigations"]["win32k"], 0, "control: {control}");
     assert_eq!(
         control["mitigations"]["child_process"], 0,
@@ -174,10 +178,33 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     enclosed.take_stdout().read_to_string(&mut out).unwrap();
     let exit = enclosed.exit_code(5_000);
     enclosed.kill();
-    let report: serde_json::Value = serde_json::from_str(&out)
+    // The network attempt comes last. On windows-2022 the LPAC process does
+    // not get an error back: it ends there, with exit code 65
+    // (ERROR_NETWORK_ACCESS_DENIED). Either way, no connection may arrive.
+    let finished = out.ends_with('}');
+    let whole = if finished {
+        out.clone()
+    } else {
+        format!("{out}}}")
+    };
+    let report: serde_json::Value = serde_json::from_str(&whole)
         .unwrap_or_else(|_| panic!("probe output: {out:?}, exit code {exit:x?}"));
-    assert_eq!(exit, Some(0), "{report}");
-    for capability in ["read", "write", "network", "process"] {
+    if finished {
+        assert_eq!(exit, Some(0), "{report}");
+        assert_eq!(report["network"], "denied", "{report}");
+    } else {
+        assert!(
+            report.get("network").is_none() && !matches!(exit, None | Some(0)),
+            "the probe stopped before the network attempt: {out:?}, exit code {exit:x?}"
+        );
+        eprintln!("enclosed probe ended at the network attempt, exit code {exit:?}");
+    }
+    listener.set_nonblocking(true).unwrap();
+    assert!(
+        matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+        "no connection reached the listener from the enclosure"
+    );
+    for capability in ["read", "write", "process"] {
         assert_eq!(
             report[capability], "denied",
             "enclosed: {capability}: {report}"

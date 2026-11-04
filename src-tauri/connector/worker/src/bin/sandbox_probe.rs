@@ -42,8 +42,9 @@ mod enclosure {
     use std::ptr::null_mut;
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::Security::{
-        GetTokenInformation, TokenCapabilities, TokenIsAppContainer,
-        TokenIsLessPrivilegedAppContainer, TOKEN_INFORMATION_CLASS, TOKEN_QUERY,
+        GetTokenInformation, TokenCapabilities, TokenIsAppContainer, TokenSecurityAttributes,
+        CLAIM_SECURITY_ATTRIBUTES_INFORMATION, CLAIM_SECURITY_ATTRIBUTE_TYPE_UINT64,
+        TOKEN_INFORMATION_CLASS, TOKEN_QUERY,
     };
     use windows_sys::Win32::System::JobObjects::{
         JobObjectBasicUIRestrictions, JobObjectExtendedLimitInformation, QueryInformationJobObject,
@@ -97,6 +98,59 @@ mod enclosure {
         }
     }
 
+    /// A NUL-terminated UTF-16 string from the system.
+    unsafe fn wide_text(text: *const u16) -> String {
+        if text.is_null() {
+            return String::new();
+        }
+        let mut length = 0;
+        while unsafe { *text.add(length) } != 0 {
+            length += 1;
+        }
+        String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(text, length) })
+    }
+
+    /// The `WIN://NOALLAPPPKG` security attribute, which is how Windows marks
+    /// a less privileged AppContainer (observed; not in the SDK headers).
+    /// `TokenIsLessPrivilegedAppContainer` fails on windows-2022.
+    fn no_all_application_packages(token: HANDLE) -> i64 {
+        let mut length = 0u32;
+        unsafe { GetTokenInformation(token, TokenSecurityAttributes, null_mut(), 0, &mut length) };
+        if length == 0 {
+            return -1;
+        }
+        let mut buffer = vec![0u64; (length as usize).div_ceil(8)];
+        let read = unsafe {
+            GetTokenInformation(
+                token,
+                TokenSecurityAttributes,
+                buffer.as_mut_ptr() as *mut c_void,
+                length,
+                &mut length,
+            )
+        };
+        if read == 0 {
+            return -1;
+        }
+        let info = unsafe { &*(buffer.as_ptr() as *const CLAIM_SECURITY_ATTRIBUTES_INFORMATION) };
+        if info.AttributeCount == 0 {
+            return 0;
+        }
+        let attributes = unsafe {
+            std::slice::from_raw_parts(info.Attribute.pAttributeV1, info.AttributeCount as usize)
+        };
+        for attribute in attributes {
+            let name = unsafe { wide_text(attribute.Name) };
+            if name.eq_ignore_ascii_case("WIN://NOALLAPPPKG")
+                && attribute.ValueType == CLAIM_SECURITY_ATTRIBUTE_TYPE_UINT64
+                && attribute.ValueCount >= 1
+            {
+                return unsafe { *attribute.Values.pUint64 } as i64;
+            }
+        }
+        0
+    }
+
     pub fn token() -> String {
         let mut token: HANDLE = null_mut();
         if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
@@ -105,7 +159,7 @@ mod enclosure {
         let line = format!(
             r#"{{"appcontainer":{},"lpac":{},"capabilities":{}}}"#,
             token_u32(token, TokenIsAppContainer),
-            token_u32(token, TokenIsLessPrivilegedAppContainer),
+            no_all_application_packages(token),
             capability_count(token)
         );
         unsafe { CloseHandle(token) };
