@@ -1,0 +1,33 @@
+# Connector workspace: the WIT world, its guest SDK, the example connector and the
+# build tooling. Kept apart from the desktop shell so the shell's lockfile and
+# build stay unchanged; the worker binary joins this workspace in delivery 2.
+[workspace]
+members = ["sdk", "examples/fictitious-bank-csv", "tools"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+rust-version = "1.99.1"
+publish = false
+
+# Tests compile wasmtime and run generated inputs; optimizing only the
+# dependencies keeps every test and mutant fast while our crates stay debug.
+# Dependencies carry no debug info, which keeps each mutant's build copy small.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+# Profile for connector components (wasm32-unknown-unknown). Panics abort, so a
+# connector bug traps instead of unwinding; the host turns a trap into an error.
+[profile.guest]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = "debuginfo"

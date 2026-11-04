@@ -1,0 +1,19 @@
+# cargo-mutants over the connector decisions: account context, batch text,
+# identities, the example's mapping and the no-imports inspection.
+# scripts/mutation-gate.js --cargo-mutants requires 90 % and no timeouts.
+examine_globs = [
+  "sdk/src/**/*.rs",
+  "examples/fictitious-bank-csv/src/**/*.rs",
+  "tools/src/**/*.rs",
+]
+# Bindings are generated code from wit-bindgen; their mutants say nothing about ours.
+exclude_re = ["bindings::"]
+# Each build copy starts from the already compiled target/ (run the tests once
+# first). The copy does not keep modification times, so Cargo still rebuilds
+# part of the tree; it saves the rest.
+copy_target = true
+# The first test run in each build copy compiles the example component (the
+# nested recipe build), which takes minutes on a loaded runner. The default
+# timeout (5x the warm baseline) killed one such run in CI. A hang still fails:
+# the gate rejects every timeout.
+minimum_test_timeout = 300

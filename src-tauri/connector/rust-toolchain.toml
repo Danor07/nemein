@@ -1,0 +1,6 @@
+# The connector recipe is pinned to the same toolchain as the Windows CI job.
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-unknown-unknown"]

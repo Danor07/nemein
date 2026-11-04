@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mutationGate } from "../scripts/mutation-gate.js";
+import { cargoMutantsReport, mutationGate } from "../scripts/mutation-gate.js";
 const report = (statuses) => ({
   files: { file: { mutants: statuses.map((status) => ({ status })) } },
 });
@@ -125,6 +125,135 @@ test("mutation gate validates the selected report and never substitutes the defa
     });
     assert.notEqual(child.status, 0);
     assert.match(child.stderr, /contains timeouts/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const lab = (summaries, baseline = ["Success"]) => ({
+  outcomes: [
+    ...baseline.map((summary) => ({ scenario: "Baseline", summary })),
+    ...summaries.map((summary, index) => ({
+      scenario: { Mutant: { name: "m" + index } },
+      summary,
+    })),
+  ],
+});
+
+test("cargo-mutants outcomes use the same gate, without unviable mutants", () => {
+  assert.deepEqual(
+    cargoMutantsReport(
+      lab(["CaughtMutant", "MissedMutant", "Unviable", "Timeout", "Failure"]),
+    ),
+    {
+      files: {
+        "cargo-mutants": {
+          mutants: [
+            { status: "Killed" },
+            { status: "Survived" },
+            { status: "Timeout" },
+            { status: "Failure" },
+          ],
+        },
+      },
+    },
+  );
+  assert.equal(
+    mutationGate(
+      cargoMutantsReport(
+        lab([
+          ...Array(9).fill("CaughtMutant"),
+          "MissedMutant",
+          ...Array(50).fill("Unviable"),
+        ]),
+      ),
+    ),
+    90,
+  );
+  for (const summary of ["Timeout", "Failure", "Success", "toString", "x"])
+    assert.throws(
+      () => mutationGate(cargoMutantsReport(lab(["CaughtMutant", summary]))),
+      /Mutation run contains/,
+      summary,
+    );
+  assert.throws(
+    () => mutationGate(cargoMutantsReport(lab(["Unviable", "Unviable"]))),
+    /No mutants were evaluated/,
+  );
+  for (const baseline of [[], ["Failure"], ["Timeout"], ["Success", "Success"]])
+    assert.throws(
+      () => cargoMutantsReport(lab(["CaughtMutant"], baseline)),
+      /baseline did not succeed/,
+    );
+  for (const invalid of [undefined, null, {}, { outcomes: {} }, []])
+    assert.throws(
+      () => cargoMutantsReport(invalid),
+      /Not a cargo-mutants outcomes report/,
+    );
+});
+
+test("PBT: cargo-mutants score ignores unviable mutants and keeps the 90 boundary", () => {
+  fc.assert(
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "CaughtMutant",
+          "CaughtMutant",
+          "CaughtMutant",
+          "MissedMutant",
+          "Unviable",
+          "Timeout",
+        ),
+        { maxLength: 120 },
+      ),
+      (summaries) => {
+        const count = (summary) =>
+          summaries.filter((s) => s === summary).length;
+        const caught = count("CaughtMutant"),
+          viable = caught + count("MissedMutant");
+        const gate = () => mutationGate(cargoMutantsReport(lab(summaries)));
+        if (count("Timeout")) assert.throws(gate, /Mutation run contains/);
+        else if (!viable) assert.throws(gate, /No mutants were evaluated/);
+        else if ((100 * caught) / viable >= 90)
+          assert.equal(gate(), (100 * caught) / viable);
+        else assert.throws(gate, /Mutation score below 90:/);
+      },
+    ),
+    { seed: 525252, numRuns: 300 },
+  );
+});
+
+test("mutation gate CLI reads cargo-mutants outcomes only when asked", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-cargo-mutants-"));
+  try {
+    const file = path.join(dir, "outcomes.json"),
+      script = fileURLToPath(
+        new URL("../scripts/mutation-gate.js", import.meta.url),
+      ),
+      run = (...args) =>
+        spawnSync(process.execPath, [script, ...args], {
+          cwd: dir,
+          encoding: "utf8",
+        });
+    writeFileSync(
+      file,
+      JSON.stringify(
+        lab([...Array(19).fill("CaughtMutant"), "MissedMutant", "Unviable"]),
+      ),
+    );
+    let r = run("--cargo-mutants", file);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "Mutation gate: 95.00%");
+    // Read as a Stryker report, the same file has no mutants.
+    r = run(file);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /No mutants were evaluated/);
+    r = run("--cargo-mutants");
+    assert.notEqual(r.status, 0);
+    writeFileSync(file, JSON.stringify(lab(["CaughtMutant", "Timeout"])));
+    r = run("--cargo-mutants", file);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /contains timeouts/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

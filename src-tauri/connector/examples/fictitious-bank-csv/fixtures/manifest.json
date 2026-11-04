@@ -1,0 +1,7 @@
+{
+  "id": "nemein.example.fictitious-bank-csv",
+  "version": "1.0.0",
+  "name": "Banco Ficticio (ejemplo)",
+  "description": "Extracto CSV de un banco inventado. Sólo sirve para pruebas y como plantilla; no corresponde a ningún banco real.",
+  "extensions": ["csv"]
+}

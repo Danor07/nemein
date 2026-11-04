@@ -1,2 +1,6 @@
 *.yml text eol=lf
 src-tauri/patches/** linguist-vendored
+# Connector sources compare exact bytes and newlines on every platform; the
+# fictitious fixtures are hashed, so git never rewrites them.
+src-tauri/connector/** text eol=lf
+src-tauri/connector/**/fixtures/** -text

@@ -2,6 +2,7 @@ node_modules/
 data/
 desktop-resources/
 src-tauri/target/
+src-tauri/connector/target/
 src-tauri/gen/
 *.log
 .preview-data/
@@ -20,6 +21,8 @@ exports/
 *.dump
 *.csv
 !examples/*.csv
+# Fictitious, hand-written connector fixtures.
+!src-tauri/connector/examples/*/fixtures/*.csv
 *.xlsx
 *.xls
 *.ofx
@@ -49,3 +52,7 @@ credential-*/
 P9C-HANDOFF.md
 src-tauri/patches/glib/Cargo.lock
 src-tauri/patches/glib/target/
+
+# cargo-mutants output
+mutants.out/
+mutants.out.old/

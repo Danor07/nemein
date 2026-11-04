@@ -73,10 +73,89 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # Connector contract (P3): the WIT world, its SDK and the example component.
+  # Cargo fetches once; tests and the nested recipe builds then run offline.
+  connector:
+    name: Connector component
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    defaults:
+      run:
+        working-directory: src-tauri/connector
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
+      - run: cargo fetch --locked
+      - name: Format and Clippy, native and wasm32
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo clippy --locked --target wasm32-unknown-unknown -p nemein-connector-sdk -p nemein-example-bank-csv -- -D warnings
+      - name: Regression, properties, fuzzing and the component without imports
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --locked -p nemein-connector-sdk && cargo test --locked -p nemein-example-bank-csv && cargo test --locked -p nemein-connector-tools
+      - name: Same component bytes from another folder and CARGO_HOME
+        run: |
+          cargo run --locked -q -p nemein-connector-tools -- build nemein-example-bank-csv "$RUNNER_TEMP/first.wasm"
+          mkdir "$RUNNER_TEMP/elsewhere"
+          tar --exclude=./target -cf - . | tar -C "$RUNNER_TEMP/elsewhere" -xf -
+          cd "$RUNNER_TEMP/elsewhere"
+          export CARGO_HOME="$RUNNER_TEMP/cargo-home"
+          cargo fetch --locked
+          cargo run --locked -q -p nemein-connector-tools -- build nemein-example-bank-csv "$RUNNER_TEMP/second.wasm"
+          cmp "$RUNNER_TEMP/first.wasm" "$RUNNER_TEMP/second.wasm"
+          sha256sum "$RUNNER_TEMP/first.wasm"
+
+  # cargo-mutants exits 2 when a mutant survives; the shared gate then applies
+  # the same 90 % threshold and timeout rejection as the Stryker scopes.
+  connector-mutation:
+    name: Connector mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: cargo install cargo-mutants --locked --version 27.1.0
+      - run: cargo fetch --locked
+        working-directory: src-tauri/connector
+      # copy_target in .cargo/mutants.toml hands this target/ to every build copy.
+      - name: Unmutated tests build dependencies once
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --locked --workspace
+      - name: 4 - Mutation score
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          status=0
+          cargo mutants --workspace --cargo-arg=--locked -j 3 || status=$?
+          test "$status" -eq 0 || test "$status" -eq 2
+          node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mutation-report-connector
+          path: src-tauri/connector/mutants.out/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Branch protection requires this name, so it must fail whenever a needed job does not succeed.
   quality:
     name: Quality gate
-    needs: [checks, mutation]
+    needs: [checks, mutation, connector, connector-mutation]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -85,7 +164,9 @@ jobs:
         env:
           CHECKS: ${{ needs.checks.result }}
           MUTATION: ${{ needs.mutation.result }}
-        run: test "$CHECKS" = success && test "$MUTATION" = success
+          CONNECTOR: ${{ needs.connector.result }}
+          CONNECTOR_MUTATION: ${{ needs.connector-mutation.result }}
+        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success
 
   native-static:
     name: Native static gate

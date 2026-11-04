@@ -35,9 +35,10 @@ Usá una carpeta temporal mediante BUDGET_DATA_DIR. Nunca pruebes cambios sobre 
 | src/cli.js y src/mcp.js | Interfaces para herramientas externas |
 | src/server.js, views/ y public/ | Interfaz local |
 | src-tauri/ y scripts/prepare-desktop.js | Ventana y empaquetado |
+| src-tauri/connector/ | Contrato WIT, SDK, ejemplo y receta de conectores WASM |
 | test/ y src/contracts/ | Pruebas, vectores y esquemas JSON |
 
-Contratos: [permisos y propuestas](docs/permisos-y-propuestas.md) y [eventos](docs/eventos.md). Uso e instalación: [README](README.md). Datos y límites de confianza: [PRIVACIDAD](PRIVACIDAD.md). Firma del instalador: [SIGNING](SIGNING.md).
+Contratos: [permisos y propuestas](docs/permisos-y-propuestas.md), [eventos](docs/eventos.md) y [conectores](docs/conectores.md). Uso e instalación: [README](README.md). Datos y límites de confianza: [PRIVACIDAD](PRIVACIDAD.md). Firma del instalador: [SIGNING](SIGNING.md).
 
 Cambios de esquema: seguir [Migraciones](docs/migraciones.md). Los archivos SQL distribuidos son inmutables; agregar otro número y probar actualizaciones con datos previos.
 
