@@ -192,23 +192,27 @@ fn main() {
     let [file, folder, port] = args.as_slice() else {
         std::process::exit(2);
     };
-    let read = std::fs::read(file).is_ok();
-    let write = std::fs::write(
-        std::path::Path::new(folder).join("probe-wrote-here.txt"),
-        b"x",
-    )
-    .is_ok();
-    let network =
-        std::net::TcpStream::connect(("127.0.0.1", port.parse::<u16>().unwrap_or(1))).is_ok();
-    let process = std::process::Command::new("cmd.exe")
-        .args(["/c", "exit", "0"])
-        .status()
-        .is_ok();
+    // Each field is written and flushed as soon as it is known: if an attempt
+    // kills the probe, the fields before it still reach the test.
+    let mut stdout = std::io::stdout().lock();
+    let mut emit = |field: String| {
+        let _ = stdout.write_all(field.as_bytes());
+        let _ = stdout.flush();
+    };
     let mut names: Vec<String> = std::env::vars_os()
         .map(|(name, _)| name.to_string_lossy().into_owned())
         .collect();
     names.sort();
-    let environment = names.len();
+    // Names only, never values; quoted as JSON.
+    let variables = names
+        .iter()
+        .map(|n| json_string(n))
+        .collect::<Vec<_>>()
+        .join(",");
+    emit(format!(
+        r#"{{"environment":{},"variables":[{variables}]"#,
+        names.len()
+    ));
     // The values of the only paths Windows may hand an AppContainer.
     let paths = ["LOCALAPPDATA", "TEMP", "TMP"]
         .iter()
@@ -219,29 +223,27 @@ fn main() {
         })
         .collect::<Vec<_>>()
         .join(",");
-    // Names only, never values, and plain ASCII in practice; quoted as JSON.
-    let variables = names
-        .iter()
-        .map(|n| json_string(n))
-        .collect::<Vec<_>>()
-        .join(",");
+    emit(format!(r#","paths":{{{paths}}}"#));
     #[cfg(windows)]
-    let enclosure = format!(
-        r#","token":{},"job":{},"mitigations":{}"#,
-        enclosure::token(),
-        enclosure::job(),
-        enclosure::mitigations()
-    );
-    #[cfg(not(windows))]
-    let enclosure = String::new();
-    let line = format!(
-        r#"{{"read":"{}","write":"{}","network":"{}","process":"{}","environment":{environment},"variables":[{variables}],"paths":{{{paths}}}{enclosure}}}"#,
-        outcome(read),
-        outcome(write),
-        outcome(network),
-        outcome(process)
-    );
-    let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(line.as_bytes());
-    let _ = stdout.flush();
+    {
+        emit(format!(r#","token":{}"#, enclosure::token()));
+        emit(format!(r#","job":{}"#, enclosure::job()));
+        emit(format!(r#","mitigations":{}"#, enclosure::mitigations()));
+    }
+    let read = std::fs::read(file).is_ok();
+    emit(format!(r#","read":"{}""#, outcome(read)));
+    let write = std::fs::write(
+        std::path::Path::new(folder).join("probe-wrote-here.txt"),
+        b"x",
+    )
+    .is_ok();
+    emit(format!(r#","write":"{}""#, outcome(write)));
+    let process = std::process::Command::new("cmd.exe")
+        .args(["/c", "exit", "0"])
+        .status()
+        .is_ok();
+    emit(format!(r#","process":"{}""#, outcome(process)));
+    let network =
+        std::net::TcpStream::connect(("127.0.0.1", port.parse::<u16>().unwrap_or(1))).is_ok();
+    emit(format!(r#","network":"{}"}}"#, outcome(network)));
 }

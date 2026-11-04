@@ -172,9 +172,11 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     drop(enclosed.take_stdin());
     let mut out = String::new();
     enclosed.take_stdout().read_to_string(&mut out).unwrap();
+    let exit = enclosed.exit_code(5_000);
     enclosed.kill();
-    let report: serde_json::Value =
-        serde_json::from_str(&out).unwrap_or_else(|_| panic!("probe output: {out:?}"));
+    let report: serde_json::Value = serde_json::from_str(&out)
+        .unwrap_or_else(|_| panic!("probe output: {out:?}, exit code {exit:x?}"));
+    assert_eq!(exit, Some(0), "{report}");
     for capability in ["read", "write", "network", "process"] {
         assert_eq!(
             report[capability], "denied",
@@ -290,6 +292,8 @@ fn a_worker_that_ends_without_answering_did_not_hit_the_memory_limit() {
     let mut out = Vec::new();
     enclosed.take_stdout().read_to_end(&mut out).unwrap();
     assert!(out.is_empty());
+    // It ran and refused its missing arguments itself.
+    assert_eq!(enclosed.exit_code(5_000), Some(2));
     enclosed.kill();
     assert_eq!(enclosed.ending(), Ending::Other);
 }

@@ -36,7 +36,7 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, FALSE, HANDLE,
-    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, TRUE,
+    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, TRUE, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Security::Authorization::{
     GetEffectiveRightsFromAclW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
@@ -69,7 +69,7 @@ use windows_sys::Win32::System::SystemServices::{
     JOB_OBJECT_MSG_JOB_MEMORY_LIMIT, JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
+    CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
     InitializeProcThreadAttributeList, OpenProcessToken, ResumeThread, TerminateProcess,
     UpdateProcThreadAttribute, WaitForSingleObject, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
     DETACHED_PROCESS, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
@@ -381,6 +381,19 @@ impl Enclosed {
     /// Whether the job carries UI restrictions (it does unless nested).
     pub fn ui_restricted(&self) -> bool {
         self.ui_restricted
+    }
+
+    /// Waits up to `ms` for the worker to end by itself and returns its exit
+    /// code; `None` if it is still running or the code cannot be read.
+    pub fn exit_code(&self, ms: u32) -> Option<u32> {
+        if unsafe { WaitForSingleObject(self.process.0, ms) } != WAIT_OBJECT_0 {
+            return None;
+        }
+        let mut code = 0u32;
+        if unsafe { GetExitCodeProcess(self.process.0, &mut code) } == FALSE {
+            return None;
+        }
+        Some(code)
     }
 
     fn peak_memory(&self) -> usize {
