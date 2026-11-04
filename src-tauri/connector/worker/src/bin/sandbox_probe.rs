@@ -13,6 +13,21 @@
 
 use std::io::Write;
 
+/// `text` as a JSON string.
+fn json_string(text: &str) -> String {
+    let mut out = String::from("\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 fn outcome(ok: bool) -> &'static str {
     if ok {
         "allowed"
@@ -194,10 +209,20 @@ fn main() {
         .collect();
     names.sort();
     let environment = names.len();
+    // The values of the only paths Windows may hand an AppContainer.
+    let paths = ["LOCALAPPDATA", "TEMP", "TMP"]
+        .iter()
+        .filter_map(|name| {
+            std::env::var(name)
+                .ok()
+                .map(|value| format!("\"{name}\":{}", json_string(&value)))
+        })
+        .collect::<Vec<_>>()
+        .join(",");
     // Names only, never values, and plain ASCII in practice; quoted as JSON.
     let variables = names
         .iter()
-        .map(|n| format!("\"{}\"", n.replace(['"', '\\'], "_")))
+        .map(|n| json_string(n))
         .collect::<Vec<_>>()
         .join(",");
     #[cfg(windows)]
@@ -210,7 +235,7 @@ fn main() {
     #[cfg(not(windows))]
     let enclosure = String::new();
     let line = format!(
-        r#"{{"read":"{}","write":"{}","network":"{}","process":"{}","environment":{environment},"variables":[{variables}]{enclosure}}}"#,
+        r#"{{"read":"{}","write":"{}","network":"{}","process":"{}","environment":{environment},"variables":[{variables}],"paths":{{{paths}}}{enclosure}}}"#,
         outcome(read),
         outcome(write),
         outcome(network),

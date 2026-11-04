@@ -181,12 +181,29 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
             "enclosed: {capability}: {report}"
         );
     }
-    assert_eq!(
-        report["variables"],
-        serde_json::json!(["SystemRoot"]),
-        "only SystemRoot: {report}"
-    );
-    assert_eq!(report["environment"], 1, "{report}");
+    // Only what the supervisor passes (LOCALAPPDATA, SystemRoot), plus the
+    // temporary folders Windows gives an AppContainer; every path points
+    // into the AppContainer's own folder, never the user's.
+    let names: Vec<&str> = report["variables"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|name| name.as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"SystemRoot"), "{report}");
+    for name in &names {
+        assert!(
+            ["LOCALAPPDATA", "SystemRoot", "TEMP", "TMP"].contains(name),
+            "{name}: {report}"
+        );
+    }
+    for (name, value) in report["paths"].as_object().unwrap() {
+        let value = value.as_str().unwrap().to_lowercase();
+        assert!(
+            value.contains(r"\packages\nemein.connectorworker"),
+            "{name} is not the AppContainer's own folder: {report}"
+        );
+    }
     assert!(!writable.join("probe-wrote-here.txt").exists());
 
     // What the enclosure applied, read from inside and compared with the

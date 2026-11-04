@@ -561,11 +561,18 @@ processTest(
 );
 
 processTest(
-  "run: the supervisor gets the request and SystemRoot, nothing else",
+  "run: the supervisor gets the request, SystemRoot and LOCALAPPDATA, nothing else",
   async (t) => {
     const file = responseFile(t, { status: "ok", manifest }, [batchText]);
+    const previous = process.env.LOCALAPPDATA;
+    const local = "C:\\Users\\ficticio\\AppData\\Local";
+    process.env.LOCALAPPDATA = local;
     process.env.NEMEIN_TEST_LEAK = "no debe pasar";
-    t.after(() => delete process.env.NEMEIN_TEST_LEAK);
+    t.after(() => {
+      delete process.env.NEMEIN_TEST_LEAK;
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+    });
     await withFake("answer", file, { accountId: "1", config: undefined });
     const received = JSON.parse(readFileSync(file + ".request.json", "utf8"));
     assert.deepEqual(received.header, {
@@ -577,11 +584,16 @@ processTest(
       received.env.SystemRoot,
       process.env.SystemRoot ?? "C:\\Windows",
     );
+    // Windows needs it to create the AppContainer process.
+    assert.equal(received.env.LOCALAPPDATA, local);
     assert.equal(received.env.NEMEIN_TEST_LEAK, undefined);
     // On Windows libuv adds the variables CreateProcess needs (PATH, TEMP...);
-    // the supervisor ignores them and gives the worker only SystemRoot.
+    // the supervisor ignores them and gives the worker its own block.
     if (process.platform !== "win32")
-      assert.deepEqual(Object.keys(received.env), ["SystemRoot"]);
+      assert.deepEqual(Object.keys(received.env).sort(), [
+        "LOCALAPPDATA",
+        "SystemRoot",
+      ]);
   },
 );
 

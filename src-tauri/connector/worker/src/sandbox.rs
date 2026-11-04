@@ -12,7 +12,8 @@
 //!   execute on the worker binary and its folder, nothing else; never on the
 //!   budget's data folder.
 //! - **Handles**: exactly two anonymous pipes are inherited (`HANDLE_LIST`),
-//!   with an environment block that only carries `SystemRoot`.
+//!   with an environment block that only carries `LOCALAPPDATA` (Windows
+//!   needs it to create the AppContainer process) and `SystemRoot`.
 //! - **Job**: `KILL_ON_JOB_CLOSE`, one active process, a committed memory
 //!   limit and death on unhandled exceptions. UI restrictions are added when
 //!   the worker is in no other job; jobs with UI limits cannot nest, and under
@@ -535,12 +536,20 @@ fn pipes() -> Result<[Owned; 4], String> {
     }
 }
 
-/// Environment of the worker: only what system DLLs may need.
-fn environment() -> Vec<u16> {
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-    let mut block: Vec<u16> = OsStr::new("SystemRoot=").encode_wide().collect();
-    block.extend(root.encode_wide());
-    block.extend([0, 0]);
+/// Environment block of the worker, sorted by name as Windows requires:
+/// `LOCALAPPDATA`, which `CreateProcessW` needs to find the AppContainer's
+/// folder (without it, error 203), and `SystemRoot`, for system DLLs.
+fn environment(local_app_data: &OsStr, system_root: &OsStr) -> Vec<u16> {
+    let mut block = Vec::new();
+    for (name, value) in [
+        ("LOCALAPPDATA=", local_app_data),
+        ("SystemRoot=", system_root),
+    ] {
+        block.extend(OsStr::new(name).encode_wide());
+        block.extend(value.encode_wide());
+        block.push(0);
+    }
+    block.push(0);
     block
 }
 
@@ -633,7 +642,11 @@ pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Enclosed, S
     let application = wide(&program);
     let mut command_line: Vec<u16> = wide(format!("\"{}\" {}", program.display(), args.join(" ")));
     let directory = wide(&folder);
-    let environment = environment();
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .filter(|value| !value.is_empty())
+        .ok_or("falta LOCALAPPDATA: Windows la necesita para crear el AppContainer")?;
+    let system_root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+    let environment = environment(&local_app_data, &system_root);
     let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
     let created = unsafe {
         CreateProcessW(
@@ -726,6 +739,15 @@ pub fn verify_enclosed() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_environment_block_is_sorted_and_double_terminated() {
+        let block = environment(OsStr::new("C:\\L"), OsStr::new("C:\\W"));
+        let expected: Vec<u16> = "LOCALAPPDATA=C:\\L\0SystemRoot=C:\\W\0\0"
+            .encode_utf16()
+            .collect();
+        assert_eq!(block, expected);
+    }
 
     #[test]
     fn a_union_keeps_every_bit_once() {
