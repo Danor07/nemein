@@ -344,5 +344,32 @@ mod tests {
             read(&mut sink.as_slice(), Kind::Response).unwrap(),
             at_limit
         );
+        // A batch of exactly its limit is written.
+        let batch_at_limit = Frame {
+            header: b"{}".to_vec(),
+            blobs: vec![vec![1; OUTPUT_MAX]],
+        };
+        let mut sink = Vec::new();
+        assert!(write(&mut sink, Kind::Response, &batch_at_limit).is_ok());
+    }
+
+    #[test]
+    fn errors_say_what_failed() {
+        assert_eq!(
+            FrameError::Truncated.to_string(),
+            "la trama terminó antes de tiempo"
+        );
+        assert_eq!(
+            FrameError::Malformed("prefijo").to_string(),
+            "trama inválida: prefijo"
+        );
+        assert_eq!(
+            FrameError::TooLarge("encabezado").to_string(),
+            "trama demasiado grande: encabezado"
+        );
+        assert_eq!(
+            FrameError::Io(io::Error::other("caño cerrado")).to_string(),
+            "error de entrada/salida: caño cerrado"
+        );
     }
 }

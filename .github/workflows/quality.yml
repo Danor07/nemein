@@ -215,7 +215,7 @@ jobs:
         working-directory: src-tauri/connector
         env:
           CARGO_NET_OFFLINE: "true"
-        run: cargo test --locked -p nemein-connector --features test-worker --lib --test sandbox --test binary
+        run: cargo test --locked -p nemein-connector --features test-worker --lib --test sandbox --test binary --test profile
       - name: 4 - Mutation shard
         working-directory: src-tauri/connector
         shell: bash

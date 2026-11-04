@@ -11,11 +11,13 @@ use nemein_connector::protocol::{code, Op};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const SUPERVISOR: &str = env!("CARGO_BIN_EXE_nemein-connector");
+fn supervisor() -> std::path::PathBuf {
+    common::bin("nemein-connector")
+}
 
 fn run(request: &Frame, args: &[&str]) -> (Frame, Duration) {
     let started = Instant::now();
-    let mut child = Command::new(SUPERVISOR)
+    let mut child = Command::new(supervisor())
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

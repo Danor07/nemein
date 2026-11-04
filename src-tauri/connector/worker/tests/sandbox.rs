@@ -24,8 +24,13 @@ use windows_sys::Win32::System::Threading::{
     GetCurrentProcess, OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
 };
 
-const SUPERVISOR: &str = env!("CARGO_BIN_EXE_nemein-connector");
-const PROBE: &str = env!("CARGO_BIN_EXE_connector-sandbox-probe");
+fn supervisor() -> PathBuf {
+    common::bin("nemein-connector")
+}
+
+fn probe() -> PathBuf {
+    common::bin("connector-sandbox-probe")
+}
 
 fn temp(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
@@ -36,7 +41,7 @@ fn temp(name: &str) -> PathBuf {
 
 /// Starts the real supervisor, writes `request` and keeps stdin open.
 fn start(request: &Frame, args: &[&str]) -> Child {
-    let mut child = Command::new(SUPERVISOR)
+    let mut child = Command::new(supervisor())
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -148,7 +153,7 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     ];
 
     // Positive control: the same probe, unenclosed, can do all of it.
-    let control = Command::new(PROBE).args(args).output().unwrap();
+    let control = Command::new(probe()).args(args).output().unwrap();
     let control: serde_json::Value = serde_json::from_slice(&control.stdout).unwrap_or_else(|e| {
         panic!(
             "control output: {:?} ({e}), status {:?}",
@@ -178,11 +183,16 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     );
 
     let memory = 256 * 1024 * 1024;
-    let mut enclosed = sandbox::spawn(Path::new(PROBE), &args, memory).expect("enclosed probe");
+    let mut enclosed = sandbox::spawn(&probe(), &args, memory).expect("enclosed probe");
     drop(enclosed.take_stdin());
-    let mut out = String::new();
-    enclosed.take_stdout().read_to_string(&mut out).unwrap();
+    let out = String::from_utf8(read_within(enclosed.take_stdout())).unwrap();
     let exit = enclosed.exit_code(5_000);
+    // The job's own accounting, read before the job ends.
+    let peak = enclosed.peak_memory();
+    assert!(
+        peak > 64 * 1024 && peak < memory,
+        "peak commit of the probe: {peak}"
+    );
     enclosed.kill();
     // The network attempt comes last. On windows-2022 the LPAC process does
     // not get an error back: it ends there, with exit code 65
@@ -266,6 +276,32 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     assert_eq!(policy("image_load") & 0b111, 0b111, "{report}");
 }
 
+/// A component whose compilation needs far more than 24 MiB of commit.
+fn big_component() -> Vec<u8> {
+    let mut body = String::new();
+    for _ in 0..200_000 {
+        body.push_str("local.get 0 i32.const 1 i32.add local.set 0\n");
+    }
+    wat::parse_str(format!(
+        "(component (core module (func (param i32) (local i32 i32) {body})))"
+    ))
+    .unwrap()
+}
+
+/// Reads `reader` to its end on another thread, and fails the test if that
+/// takes more than 30 s: a handle left open must fail, not hang the run.
+fn read_within(mut reader: Box<dyn Read + Send>) -> Vec<u8> {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut out = Vec::new();
+        let _ = reader.read_to_end(&mut out);
+        let _ = sender.send(out);
+    });
+    receiver
+        .recv_timeout(Duration::from_secs(30))
+        .expect("the pipe reached its end in time")
+}
+
 /// Whether this test process is inside a job, as CI runners may put it.
 fn in_a_job() -> bool {
     let mut nested = 0;
@@ -276,16 +312,7 @@ fn in_a_job() -> bool {
 
 #[test]
 fn the_memory_limit_is_reported() {
-    // Compiling a large component needs far more than 24 MiB of commit.
-    let mut body = String::new();
-    for _ in 0..200_000 {
-        body.push_str("local.get 0 i32.const 1 i32.add local.set 0\n");
-    }
-    let big = wat::parse_str(format!(
-        "(component (core module (func (param i32) (local i32 i32) {body})))"
-    ))
-    .unwrap();
-    let frame = request(Op::Describe, big, Vec::new(), "", "1");
+    let frame = request(Op::Describe, big_component(), Vec::new(), "", "1");
     let (answer, _) = run(&frame, &["--memory-mb", "24"]);
     assert_eq!(host_code(&answer), code::MEMORY_LIMIT);
 }
@@ -319,21 +346,66 @@ fn lowered_limits_are_accepted_at_their_bounds() {
 #[test]
 fn a_worker_that_ends_without_answering_did_not_hit_the_memory_limit() {
     // The probe without arguments exits at once and writes nothing.
-    let mut enclosed =
-        sandbox::spawn(Path::new(PROBE), &[], 256 * 1024 * 1024).expect("enclosed probe");
+    let mut enclosed = sandbox::spawn(&probe(), &[], 256 * 1024 * 1024).expect("enclosed probe");
     drop(enclosed.take_stdin());
-    let mut out = Vec::new();
-    enclosed.take_stdout().read_to_end(&mut out).unwrap();
-    assert!(out.is_empty());
+    assert!(read_within(enclosed.take_stdout()).is_empty());
     // It ran and refused its missing arguments itself.
     assert_eq!(enclosed.exit_code(5_000), Some(2));
     enclosed.kill();
+    assert!(!enclosed.memory_reported());
     assert_eq!(enclosed.ending(), Ending::Other);
 }
 
 #[test]
+fn kill_ends_the_worker_at_once() {
+    let mut enclosed =
+        sandbox::spawn(&supervisor(), &["worker"], 256 * 1024 * 1024).expect("enclosed worker");
+    let hang = request(
+        Op::Parse,
+        component("nemein-fixture-hostile"),
+        Vec::new(),
+        "hang",
+        "1",
+    );
+    frame::write(&mut enclosed.take_stdin(), Kind::Request, &hang).unwrap();
+    assert_eq!(enclosed.exit_code(500), None, "the worker is running");
+    enclosed.kill();
+    // TerminateJobObject(job, 1), already waited for.
+    assert_eq!(enclosed.exit_code(0), Some(1));
+}
+
+#[test]
+fn the_job_itself_reports_the_memory_limit() {
+    let limit = 24 * 1024 * 1024;
+    let mut enclosed = sandbox::spawn(&supervisor(), &["worker"], limit).expect("enclosed worker");
+    let frame = request(Op::Describe, big_component(), Vec::new(), "", "1");
+    frame::write(&mut enclosed.take_stdin(), Kind::Request, &frame).unwrap();
+    let _ = read_within(enclosed.take_stdout());
+    enclosed.kill();
+    let peak = enclosed.peak_memory();
+    assert!(peak >= limit / 10 * 9, "peak commit at the limit: {peak}");
+    assert!(enclosed.memory_reported(), "the job posted the limit");
+}
+
+#[test]
+fn a_file_that_is_not_a_program_is_refused_with_the_system_error() {
+    let dir = temp("not-a-program");
+    let file = dir.join("conector-ficticio.txt");
+    std::fs::write(&file, "no es un programa").unwrap();
+    let error = sandbox::spawn(&file, &[], 64 * 1024 * 1024)
+        .err()
+        .expect("refused");
+    let code: u32 = error
+        .strip_prefix("CreateProcessW en el AppContainer: error ")
+        .unwrap_or_else(|| panic!("{error}"))
+        .parse()
+        .unwrap_or_else(|_| panic!("{error}"));
+    assert_ne!(code, 0, "{error}");
+}
+
+#[test]
 fn the_worker_refuses_to_run_without_the_enclosure() {
-    let mut child = Command::new(SUPERVISOR)
+    let mut child = Command::new(supervisor())
         .arg("worker")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -416,7 +488,7 @@ fn rights_are_granted_on_the_binary_and_its_folder_only() {
         &[],
     );
     let sid = sandbox::container_sid().unwrap();
-    let binary = std::path::absolute(SUPERVISOR).unwrap();
+    let binary = std::path::absolute(supervisor()).unwrap();
     let folder = binary.parent().unwrap();
     let read_execute = 0x1200a9; // FILE_GENERIC_READ | FILE_GENERIC_EXECUTE
     assert_eq!(
@@ -446,7 +518,7 @@ fn rights_are_granted_on_the_binary_and_its_folder_only() {
 
 #[test]
 fn oversized_and_truncated_requests_are_refused_by_the_supervisor() {
-    let mut child = Command::new(SUPERVISOR)
+    let mut child = Command::new(supervisor())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -458,7 +530,7 @@ fn oversized_and_truncated_requests_are_refused_by_the_supervisor() {
     assert_eq!(host_code(&answer), code::REQUEST_INVALID);
     assert_eq!(child.wait().unwrap().code(), Some(2));
 
-    let mut child = Command::new(SUPERVISOR)
+    let mut child = Command::new(supervisor())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()

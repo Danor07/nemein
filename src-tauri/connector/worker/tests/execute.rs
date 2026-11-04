@@ -82,6 +82,10 @@ fn connector_results_and_their_limits() {
     assert_eq!(host_code(&hostile("big-error")), code::ERROR_TOO_LARGE);
     assert_eq!(host_code(&hostile("big-code")), code::ERROR_TOO_LARGE);
     assert_eq!(host_code(&hostile("huge")), code::OUTPUT_TOO_LARGE);
+    // Exactly the limit is relayed.
+    let exact = hostile("exact");
+    assert_eq!(header(&exact)["status"], "ok");
+    assert_eq!(exact.blobs[0].len(), nemein_connector::limits::OUTPUT_MAX);
 }
 
 #[test]

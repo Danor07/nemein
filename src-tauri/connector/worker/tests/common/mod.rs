@@ -75,8 +75,25 @@ pub fn header(frame: &Frame) -> serde_json::Value {
     serde_json::from_slice(&frame.header).expect("JSON header")
 }
 
+/// A binary of this package, from the target directory of the running test.
+/// Resolved at run time on purpose: cargo-mutants copies an already built
+/// `target/` into each build directory, and a test that is not rebuilt there
+/// still carries the original path that `CARGO_BIN_EXE_*` baked in, so it
+/// would judge the unmutated binary.
+pub fn bin(name: &str) -> PathBuf {
+    let test = std::env::current_exe().expect("test executable");
+    // target/<profile>/deps/<test>-<hash>[.exe]
+    let profile = test
+        .parent()
+        .and_then(Path::parent)
+        .expect("target/<profile>");
+    let path = profile.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
+    assert!(path.is_file(), "{} was not built", path.display());
+    path
+}
+
 pub fn test_worker() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_connector-test-worker"))
+    bin("connector-test-worker")
 }
 
 /// The test worker as an unenclosed child process.

@@ -36,7 +36,7 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, FALSE, HANDLE,
-    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, TRUE, WAIT_OBJECT_0,
+    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, S_OK, TRUE, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::Security::Authorization::{
     GetEffectiveRightsFromAclW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
@@ -48,8 +48,7 @@ use windows_sys::Win32::Security::Isolation::{
 };
 use windows_sys::Win32::Security::{
     FreeSid, GetTokenInformation, TokenIsAppContainer, ACL, DACL_SECURITY_INFORMATION,
-    NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, SECURITY_CAPABILITIES,
-    TOKEN_QUERY,
+    NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_CAPABILITIES, TOKEN_QUERY,
 };
 use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_EXECUTE, FILE_GENERIC_READ};
 use windows_sys::Win32::System::JobObjects::{
@@ -187,9 +186,16 @@ impl Owned {
 
 impl Drop for Owned {
     fn drop(&mut self) {
-        if !self.0.is_null() && self.0 != INVALID_HANDLE_VALUE {
-            unsafe { CloseHandle(self.0) };
-        }
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// Owns `handle`, which `step` returned; a null handle is that step's error.
+fn owned(handle: HANDLE, step: &str) -> Result<Owned, String> {
+    if handle.is_null() {
+        Err(last_error(step))
+    } else {
+        Ok(Owned(handle))
     }
 }
 
@@ -219,7 +225,12 @@ const PROFILE_EXISTS: i32 = 0x8007_00b7_u32 as i32;
 /// profile is created once per user and its SID derived from then on. The
 /// name fixes the SID, so it is the same in every run.
 pub fn container_sid() -> Result<ContainerSid, String> {
-    let name = wide(APPCONTAINER_NAME);
+    profile_sid(APPCONTAINER_NAME)
+}
+
+/// The SID of the AppContainer profile `name`, registering it if needed.
+pub fn profile_sid(name: &str) -> Result<ContainerSid, String> {
+    let name = wide(name);
     let display = wide("Nemein: conectores encerrados");
     let description = wide("Ejecuta conectores WASM de Nemein sin capacidades.");
     let mut sid: PSID = null_mut();
@@ -233,7 +244,7 @@ pub fn container_sid() -> Result<ContainerSid, String> {
             &mut sid,
         )
     };
-    if created >= 0 && !sid.is_null() {
+    if created == S_OK {
         return Ok(ContainerSid(sid));
     }
     if created != PROFILE_EXISTS {
@@ -243,7 +254,7 @@ pub fn container_sid() -> Result<ContainerSid, String> {
         ));
     }
     let derived = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid) };
-    if derived < 0 || sid.is_null() {
+    if derived != S_OK {
         return Err(format!(
             "no se pudo obtener el AppContainer: 0x{:08x}",
             derived as u32
@@ -396,7 +407,8 @@ impl Enclosed {
         Some(code)
     }
 
-    fn peak_memory(&self) -> usize {
+    /// The most memory the job committed at once.
+    pub fn peak_memory(&self) -> usize {
         let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
         let read = unsafe {
             QueryInformationJobObject(
@@ -432,7 +444,15 @@ impl Worker for Enclosed {
     }
 
     fn ending(&mut self) -> Ending {
-        // Every message the job posted, without waiting for more.
+        let reported = self.memory_reported();
+        memory_verdict(reported, self.peak_memory(), self.memory)
+    }
+}
+
+impl Enclosed {
+    /// Whether the job posted a memory-limit message; reads every message
+    /// already queued, without waiting for more.
+    pub fn memory_reported(&self) -> bool {
         let mut reported = false;
         loop {
             let (mut message, mut key, mut overlapped) = (0u32, 0usize, null_mut::<OVERLAPPED>());
@@ -448,48 +468,45 @@ impl Worker for Enclosed {
                 reported = true;
             }
         }
-        memory_verdict(reported, self.peak_memory(), self.memory)
-    }
-}
-
-impl Drop for Enclosed {
-    fn drop(&mut self) {
-        // Closing the last job handle kills the worker anyway; be explicit.
-        unsafe { TerminateJobObject(self.job.0, 1) };
+        reported
     }
 }
 
 fn job(memory: usize) -> Result<(Owned, Owned), String> {
-    let job = Owned(unsafe { CreateJobObjectW(null(), null()) });
-    if job.0.is_null() {
-        return Err(last_error("CreateJobObjectW"));
-    }
+    // Dropping the only handle to the job kills the worker: KILL_ON_JOB_CLOSE.
+    let job = owned(
+        unsafe { CreateJobObjectW(null(), null()) },
+        "CreateJobObjectW",
+    )?;
     let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
     limits.BasicLimitInformation.LimitFlags = job_limits();
     limits.BasicLimitInformation.ActiveProcessLimit = 1;
     limits.JobMemoryLimit = memory;
-    let port = Owned(unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, null_mut(), 0, 1) });
-    if port.0.is_null() {
-        return Err(last_error("CreateIoCompletionPort"));
-    }
+    let port = owned(
+        unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, null_mut(), 0, 1) },
+        "CreateIoCompletionPort",
+    )?;
     let association = JOBOBJECT_ASSOCIATE_COMPLETION_PORT {
         CompletionKey: null_mut(),
         CompletionPort: port.0,
     };
-    let set = |class, info: *const c_void, size: usize| unsafe {
-        SetInformationJobObject(job.0, class, info, size as u32) != 0
+    let set = |class, info: *const c_void, size: usize| {
+        if unsafe { SetInformationJobObject(job.0, class, info, size as u32) } == FALSE {
+            Err(last_error("SetInformationJobObject"))
+        } else {
+            Ok(())
+        }
     };
-    if !set(
+    set(
         JobObjectExtendedLimitInformation,
         &limits as *const _ as _,
         size_of_val(&limits),
-    ) || !set(
+    )?;
+    set(
         JobObjectAssociateCompletionPortInformation,
         &association as *const _ as _,
         size_of_val(&association),
-    ) {
-        return Err(last_error("SetInformationJobObject"));
-    }
+    )?;
     Ok((job, port))
 }
 
@@ -520,33 +537,33 @@ fn restrict_ui(job: &Owned, process: &Owned) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Two pipes: (child stdin read, parent stdin write), (parent stdout read,
-/// child stdout write). Only the child's ends are inheritable.
-fn pipes() -> Result<[Owned; 4], String> {
-    let attributes = SECURITY_ATTRIBUTES {
-        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
-        lpSecurityDescriptor: null_mut(),
-        bInheritHandle: TRUE,
-    };
-    let (mut child_in, mut parent_in, mut parent_out, mut child_out) =
-        (null_mut(), null_mut(), null_mut(), null_mut());
-    unsafe {
-        if CreatePipe(&mut child_in, &mut parent_in, &attributes, 0) == FALSE {
-            return Err(last_error("CreatePipe"));
-        }
-        let pair = [Owned(child_in), Owned(parent_in)];
-        if CreatePipe(&mut parent_out, &mut child_out, &attributes, 0) == FALSE {
-            return Err(last_error("CreatePipe"));
-        }
-        let [child_in, parent_in] = pair;
-        let (parent_out, child_out) = (Owned(parent_out), Owned(child_out));
-        if SetHandleInformation(parent_in.0, HANDLE_FLAG_INHERIT, 0) == FALSE
-            || SetHandleInformation(parent_out.0, HANDLE_FLAG_INHERIT, 0) == FALSE
-        {
-            return Err(last_error("SetHandleInformation"));
-        }
-        Ok([child_in, parent_in, parent_out, child_out])
+/// One anonymous pipe as (read end, write end), neither inheritable.
+fn pipe() -> Result<(Owned, Owned), String> {
+    let (mut read, mut write) = (null_mut(), null_mut());
+    if unsafe { CreatePipe(&mut read, &mut write, null(), 0) } == FALSE {
+        return Err(last_error("CreatePipe"));
     }
+    Ok((Owned(read), Owned(write)))
+}
+
+/// Lets the child inherit `handle`. The handle list passes only inheritable
+/// handles, so a child end left out of here makes CreateProcessW fail.
+fn inheritable(handle: &Owned) -> Result<(), String> {
+    if unsafe { SetHandleInformation(handle.0, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) } == FALSE
+    {
+        return Err(last_error("SetHandleInformation"));
+    }
+    Ok(())
+}
+
+/// Two pipes: (child stdin read, parent stdin write), (parent stdout read,
+/// child stdout write). Only the child's ends are ever inheritable.
+fn pipes() -> Result<[Owned; 4], String> {
+    let (child_in, parent_in) = pipe()?;
+    let (parent_out, child_out) = pipe()?;
+    inheritable(&child_in)?;
+    inheritable(&child_out)?;
+    Ok([child_in, parent_in, parent_out, child_out])
 }
 
 /// Environment block of the worker, sorted by name as Windows requires:
@@ -729,20 +746,21 @@ pub fn verify_enclosed() -> Result<(), String> {
             return Err(last_error("OpenProcessToken"));
         }
         let token = Owned(token);
+        // Both answers start as "no": a query that fails leaves them so.
         let (mut is_container, mut length) = (0u32, 0u32);
-        let read = GetTokenInformation(
+        GetTokenInformation(
             token.0,
             TokenIsAppContainer,
             &mut is_container as *mut _ as _,
             4,
             &mut length,
         );
-        if read == FALSE || is_container == 0 {
+        if is_container == 0 {
             return Err("el trabajador no está dentro de un AppContainer".into());
         }
         let mut in_job = FALSE;
-        if IsProcessInJob(GetCurrentProcess(), null_mut(), &mut in_job) == FALSE || in_job == FALSE
-        {
+        IsProcessInJob(GetCurrentProcess(), null_mut(), &mut in_job);
+        if in_job == FALSE {
             return Err("el trabajador no está dentro de un Job".into());
         }
     }

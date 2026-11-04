@@ -38,3 +38,34 @@ pub const HOSTCALL_FUEL: usize = OUTPUT_MAX + 1024 * 1024;
 pub const WORKER_THREAD_STACK: usize = 8 * 1024 * 1024;
 /// Native stack for wasm frames.
 pub const GUEST_STACK_MAX: usize = 512 * 1024;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The values `docs/conectores.md` and `src/connector-runner.js` publish,
+    /// written out: a changed factor fails here, not only where it is used.
+    #[test]
+    fn limits_are_the_published_contract() {
+        assert_eq!(COMPONENT_MAX, 16_777_216);
+        assert_eq!(INPUT_MAX, 5_000_000);
+        assert_eq!(CONFIG_MAX, 16_384);
+        assert_eq!(ACCOUNT_ID_MAX, 16);
+        assert_eq!(HEADER_MAX, 65_536);
+        assert_eq!(OUTPUT_MAX, 25_165_824);
+        assert_eq!(MANIFEST_MAX, 8_192);
+        assert_eq!(MANIFEST_EXTENSIONS_MAX, 8);
+        assert_eq!(ERROR_CODE_MAX, 64);
+        assert_eq!(ERROR_MESSAGE_MAX, 1_024);
+        assert_eq!(DEADLINE_MS, 10_000);
+        assert_eq!(MEMORY_BYTES, 268_435_456);
+        assert_eq!(GUEST_MEMORY_MAX, 134_217_728);
+        assert_eq!(GUEST_TABLE_ELEMENTS_MAX, 100_000);
+        assert_eq!(GUEST_INSTANCES_MAX, 32);
+        assert_eq!(GUEST_TABLES_MAX, 32);
+        assert_eq!(GUEST_MEMORIES_MAX, 4);
+        assert_eq!(HOSTCALL_FUEL, 26_214_400);
+        assert_eq!(WORKER_THREAD_STACK, 8_388_608);
+        assert_eq!(GUEST_STACK_MAX, 524_288);
+    }
+}

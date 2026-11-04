@@ -101,5 +101,7 @@ Dos decisiones evitan mutantes que ninguna prueba puede matar sin bajar el umbra
 
 La sonda nativa compara lo que el encierro aplicó, leído desde adentro, con valores escritos a mano, nunca con las funciones que los arman.
 
+Las pruebas de Rust ubican los binarios junto a su propio ejecutable (`tests/common::bin`) y no con `CARGO_BIN_EXE_*`. cargo-mutants copia un `target/` ya compilado, y una prueba que no se recompila en la copia conserva la ruta del binario original, sin mutar. La primera medición de Windows dio por vivo hasta un `main` vacío por esa razón. Las lecturas de caños tienen plazo, así que un handle que nunca se cierra falla la prueba en lugar de llegar al plazo de cargo-mutants. El ciclo de vida del perfil se prueba con un AppContainer propio de cada proceso, para que dos copias en paralelo no se pisen.
+
 Stryker suma el alcance `connector-runner` sobre `src/connector-runner.js`. El supervisor falso termina solo a los 8 s, así que un mutante que deja colgado al ejecutor falla una aserción y no llega al plazo de Stryker.
 

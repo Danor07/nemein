@@ -7,10 +7,14 @@ use nemein_connector::protocol::{self, Op, RequestHeader};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-const BINARY: &str = env!("CARGO_BIN_EXE_nemein-connector");
+mod common;
+
+fn binary() -> std::path::PathBuf {
+    common::bin("nemein-connector")
+}
 
 fn run(args: &[&str], input: &[u8]) -> (Option<i32>, serde_json::Value) {
-    let mut child = Command::new(BINARY)
+    let mut child = Command::new(binary())
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

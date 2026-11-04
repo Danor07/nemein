@@ -35,6 +35,10 @@ required-features = ["test-worker"]
 name = "enclosed_hostile"
 required-features = ["test-worker"]
 
+[[test]]
+name = "profile"
+required-features = ["test-worker"]
+
 [features]
 test-worker = []
 

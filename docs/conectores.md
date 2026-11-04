@@ -202,7 +202,9 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
 - **Mutación:**
   - cargo-mutants mide las partes portables del trabajador (`frame`, `protocol`, `execute`, `supervise`, `limits`) dentro de `Connector mutation`;
   - `sandbox.rs` y `main.rs` se miden en Windows con [mutants-windows.toml](../src-tauri/connector/.cargo/mutants-windows.toml), en cuatro shards que el verificador juzga como una sola corrida. Las banderas se arman con una sola función de unión, para que reemplazar `|` por `^` no deje mutantes equivalentes, y pruebas de respuesta conocida fijan cada conjunto en su valor documentado;
-  - Stryker mide `src/connector-runner.js` en el alcance `connector-runner`.
+  - Stryker mide `src/connector-runner.js` en el alcance `connector-runner`;
+  - pruebas de respuesta conocida fijan cada tope de `limits.rs` y los límites del `Store`, comprobados con el propio `ResourceLimiter`;
+  - las pruebas ubican los binarios junto a su propio ejecutable, porque cargo-mutants reutiliza un `target/` ya compilado.
 
 Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pruebas) y, desde `src-tauri/connector`, `cargo mutants --workspace` seguido de `node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json`. En CI, los jobs `Connector component`, `Connector mutation`, `Connector sandbox (Windows)` y `Connector enclosure mutation` son requisitos del `Quality gate`.
 

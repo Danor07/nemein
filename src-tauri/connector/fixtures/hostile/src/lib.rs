@@ -34,6 +34,7 @@ impl Guest for Hostile {
                 }
             }
             "huge" => Ok("x".repeat(25_165_825)),
+            "exact" => Ok("x".repeat(25_165_824)),
             "host-alloc" => Ok("x".repeat(100 * 1024 * 1024)),
             "invalid" => Ok("esto no es JSON".into()),
             "lie-provenance" => Ok(batch("otro.conector", &ctx.account_id)),

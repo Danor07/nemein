@@ -128,13 +128,8 @@ pub fn execute(request: &Frame) -> Frame {
             return protocol::host_error(code::COMPONENT_INVALID, &describe_error(&error))
         }
     };
-    let imports = component.component_type().imports(&engine).count();
-    if imports > 0 {
-        return protocol::host_error(
-            code::COMPONENT_HAS_IMPORTS,
-            &format!("el componente declara {imports} imports"),
-        );
-    }
+    // No second import check here: wasmtime's `imports()` lists a subset of
+    // what the pre-scan above counted, which was zero.
     let mut store = Store::new(&engine, limits());
     store.limiter(|limits| limits);
     // Bounds what the host lifts out of the guest per call, results included:
@@ -185,5 +180,104 @@ pub fn execute(request: &Frame) -> Frame {
                 message: error.message,
             },
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasmtime::ResourceLimiter;
+
+    #[test]
+    fn the_manifest_cap_counts_every_field_once() {
+        let at = Manifest {
+            id: "i".repeat(10),
+            version: "v".repeat(20),
+            name: "n".repeat(30),
+            description: "d".repeat(MANIFEST_MAX - 10 - 20 - 30 - 15 - 25),
+            extensions: vec!["e".repeat(15), "f".repeat(25)],
+        };
+        assert!(!manifest_too_large(&at));
+        // One byte more in any single field crosses the cap.
+        for field in 0..5 {
+            let mut over = at.clone();
+            match field {
+                0 => over.id.push('i'),
+                1 => over.version.push('v'),
+                2 => over.name.push('n'),
+                3 => over.description.push('d'),
+                _ => over.extensions[1].push('f'),
+            }
+            assert!(manifest_too_large(&over), "field {field}");
+        }
+        let small = |count| Manifest {
+            id: "i".into(),
+            version: "1".into(),
+            name: "n".into(),
+            description: String::new(),
+            extensions: vec!["csv".into(); count],
+        };
+        assert!(!manifest_too_large(&small(MANIFEST_EXTENSIONS_MAX)));
+        assert!(manifest_too_large(&small(MANIFEST_EXTENSIONS_MAX + 1)));
+    }
+
+    #[test]
+    fn the_error_cap_counts_characters() {
+        let error = |code: String, message: String| api::Error { code, message };
+        assert!(!error_too_large(&error(
+            "C".repeat(ERROR_CODE_MAX),
+            "ñ".repeat(ERROR_MESSAGE_MAX)
+        )));
+        assert!(error_too_large(&error(
+            "C".repeat(ERROR_CODE_MAX + 1),
+            "m".into()
+        )));
+        assert!(error_too_large(&error(
+            "C".into(),
+            "ñ".repeat(ERROR_MESSAGE_MAX + 1)
+        )));
+    }
+
+    #[test]
+    fn the_store_limits_are_the_documented_ones() {
+        let mut limits = limits();
+        assert!(limits.memory_growing(0, GUEST_MEMORY_MAX, None).unwrap());
+        // trap_on_grow_failure: past the limit the guest traps.
+        assert!(limits
+            .memory_growing(0, GUEST_MEMORY_MAX + 1, None)
+            .is_err());
+        assert!(limits
+            .table_growing(0, GUEST_TABLE_ELEMENTS_MAX, None)
+            .unwrap());
+        assert!(limits
+            .table_growing(0, GUEST_TABLE_ELEMENTS_MAX + 1, None)
+            .is_err());
+        assert_eq!(limits.instances(), GUEST_INSTANCES_MAX);
+        assert_eq!(limits.tables(), GUEST_TABLES_MAX);
+        assert_eq!(limits.memories(), GUEST_MEMORIES_MAX);
+    }
+
+    #[test]
+    fn errors_are_described_by_their_first_line() {
+        let chained = wasmtime::Error::msg("causa").context("contexto");
+        assert_eq!(describe_error(&chained), "contexto: causa");
+        let lines = wasmtime::Error::msg("primera\nsegunda");
+        assert_eq!(describe_error(&lines), "primera");
+    }
+
+    #[test]
+    fn imports_after_a_nested_component_are_top_level() {
+        // The nested component ends before the import: depth goes back to 1.
+        let bytes = wat::parse_str(
+            r#"(component
+                 (component)
+                 (type $r (record (field "a" string)))
+                 (import "manifest" (type (eq $r))))"#,
+        )
+        .unwrap();
+        assert_eq!(top_level_imports(&bytes), Ok(1));
+        // Imports inside a nested component are not the outer one's.
+        let nested = wat::parse_str(r#"(component (component (import "f" (func))))"#).unwrap();
+        assert_eq!(top_level_imports(&nested), Ok(0));
     }
 }

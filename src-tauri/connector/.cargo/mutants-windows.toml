@@ -2,12 +2,16 @@
 # worker/src/sandbox.rs (AppContainer, Job, pipes, rights) and
 # worker/src/main.rs (supervisor and worker entry points). They are judged by
 # the known-answer unit tests of the flag sets, the enclosure tests in
-# worker/tests/sandbox.rs and the option checks in worker/tests/binary.rs.
+# worker/tests/sandbox.rs, the option checks in worker/tests/binary.rs and
+# the profile lifecycle in worker/tests/profile.rs. The tests find the
+# binaries next to their own executable (tests/common::bin): a path baked in
+# with CARGO_BIN_EXE_* would still name the unmutated build after
+# copy_target.
 # The CI job splits the run into four shards and the shared gate judges them
 # as one run: 90 % and no timeouts.
 examine_globs = ["worker/src/sandbox.rs", "worker/src/main.rs"]
 features = ["nemein-connector/test-worker"]
-additional_cargo_test_args = ["--lib", "--test", "sandbox", "--test", "binary"]
+additional_cargo_test_args = ["--lib", "--test", "sandbox", "--test", "binary", "--test", "profile"]
 copy_target = true
 # The first test run in each copy builds the example component.
 minimum_test_timeout = 300
