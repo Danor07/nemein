@@ -42,7 +42,7 @@ Los reportes de mutación se conservan como artefactos incluso cuando falla el u
 
 ## Instalación Windows y comportamiento visible
 
-El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo y comprueba archivos, registro de desinstalación, destino del acceso del menú Inicio, handshake MCP desde el runtime instalado, credenciales y arranque nativo. El script impide ejecutarlo como instalador local fuera del runner efímero. Este ensayo no publica el paquete y no usa el certificado privado de distribución. La variante autofirmada se verifica por separado.
+El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo y comprueba archivos, registro de desinstalación, destino del acceso del menú Inicio, handshake MCP desde el runtime instalado, el conector instalado, credenciales y arranque nativo. Al final desinstala con /S y comprueba que no quedan la entrada del registro, `nemein.exe` ni el perfil AppContainer del conector. El script impide ejecutarlo como instalador local fuera del runner efímero. Este ensayo no publica el paquete y no usa el certificado privado de distribución. La variante autofirmada se verifica por separado.
 
 Las herramientas whoami.exe e icacls.exe se resuelven en SystemRoot/System32, independientemente del PATH o de Git Bash. El evaluador puro niega fallbacks distintos de ask/deny, incluso si una regla antigua evitó la validación de guardado; lo cubren propiedades y una regresión por el llamador real.
 

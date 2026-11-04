@@ -174,6 +174,7 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
 
 - `npm run desktop:prepare` ejecuta [prepare-connector.js](../scripts/prepare-connector.js), que compila sólo el binario de producción (`--release --locked --bin nemein-connector`, nunca la feature de prueba) y lo copia a `src-tauri/binaries/nemein-connector-<triple>`.
 - Tauri lo empaqueta como `externalBin`, junto a `nemein.exe`, y le pasa a Node su ruta en `NEMEIN_CONNECTOR_BIN`.
+- El desinstalador borra el perfil del AppContainer, y con él su carpeta bajo `%LOCALAPPDATA%\Packages` (`DeleteAppContainerProfile`, en el hook [hooks.nsh](../src-tauri/nsis/hooks.nsh)). Si un perfil ya no existe, no es un error. Si una actualización lo borra, el supervisor lo vuelve a registrar en el primer uso. El smoke del instalador comprueba que el conector instalado registró el perfil y que la desinstalación silenciosa no deja ni el registro ni la carpeta.
 - En Linux, el chequeo del shell usa un archivo de relleno: los conectores no corren ahí.
 
 ## Flujo y administración (P3.3)
