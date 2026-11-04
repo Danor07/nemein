@@ -42,7 +42,7 @@ Los reportes de mutación se conservan como artefactos incluso cuando falla el u
 
 ## Instalación Windows y comportamiento visible
 
-El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo y comprueba archivos, registro de desinstalación, destino del acceso del menú Inicio, handshake MCP desde el runtime instalado, credenciales y arranque nativo. El script impide ejecutarlo como instalador local fuera del runner efímero. Este ensayo no publica el paquete y no usa el certificado privado de distribución. La variante autofirmada se verifica por separado.
+El job Windows construye un NSIS de prueba, lo instala con /S en un runner nuevo y comprueba archivos, registro de desinstalación, destino del acceso del menú Inicio, handshake MCP desde el runtime instalado, el conector instalado, credenciales y arranque nativo. Al final desinstala con /S y comprueba que no quedan la entrada del registro, `nemein.exe` ni el perfil AppContainer del conector. El script impide ejecutarlo como instalador local fuera del runner efímero. Este ensayo no publica el paquete y no usa el certificado privado de distribución. La variante autofirmada se verifica por separado.
 
 Las herramientas whoami.exe e icacls.exe se resuelven en SystemRoot/System32, independientemente del PATH o de Git Bash. El evaluador puro niega fallbacks distintos de ask/deny, incluso si una regla antigua evitó la validación de guardado; lo cubren propiedades y una regresión por el llamador real.
 
@@ -105,4 +105,28 @@ La sonda nativa compara lo que el encierro aplicó, leído desde adentro, con va
 Las pruebas de Rust ubican los binarios junto a su propio ejecutable (`tests/common::bin`) y no con `CARGO_BIN_EXE_*`. cargo-mutants copia un `target/` ya compilado, y una prueba que no se recompila en la copia conserva la ruta del binario original, sin mutar. La primera medición de Windows dio por vivo hasta un `main` vacío por esa razón. Las lecturas de caños tienen plazo, así que un handle que nunca se cierra falla la prueba en lugar de llegar al plazo de cargo-mutants. El ciclo de vida del perfil se prueba con un AppContainer propio de cada proceso, para que dos copias en paralelo no se pisen.
 
 Stryker suma el alcance `connector-runner` sobre `src/connector-runner.js`. El supervisor falso termina solo a los 8 s, así que un mutante que deja colgado al ejecutor falla una aserción y no llega al plazo de Stryker.
+
+## Conectores WASM P3.3
+
+`stryker.connectors.config.mjs` agrega el alcance `connectors`, también en la matriz de mutación de CI. Mide:
+- `src/connectors.js` entero;
+- en `src/core.js`, la inserción compartida de importaciones y el dominio que ve el módulo;
+- en `src/access.js`, la guarda y la auditoría de instalar, habilitar y revocar.
+
+Primero corren las propiedades y el fuzzing de conectores. Después, la regresión de conectores y la de CSV, que comparte la inserción.
+
+La primera medición dio 80,91 % (97 sobrevivientes) y fue rechazada. La siguiente, sobre la entrega, dio **99,37 %**: 470 de 473 mutantes muertos, sin timeouts, errores ni mutantes sin cobertura. Los tres que sobreviven son equivalentes:
+- la bandera `wx` del archivo temporal (2): con un nombre aleatorio de 64 bits, ninguna prueba encuentra el archivo ya creado;
+- la codificación `utf8` al leer el inventario (1): `JSON.parse` lee igual el búfer.
+
+Para llegar ahí no se bajó el umbral ni se excluyeron operadores:
+- **Pruebas exactas:** filas de auditoría completas de cada paso y de cada fallo; código que intenta administrar durante la solicitud de un agente; bordes exactos (configuración de 16 KiB, tope de 64 MiB entre actores y 24 h de vencimiento escritas como fecha y no derivadas de la constante); hashes con caracteres alrededor; un componente cambiado sin cambiar de tamaño.
+- **Sustituto del trabajador:** ahora rechaza las solicitudes con la misma validación que el trabajador (`validateRequest`), así que un argumento inválido hacia el encierro falla también en las pruebas.
+- **Propiedad de habilitación:** cada hecho es correcto cuatro de cada cinco veces. Con hechos equiprobables, un fallo en un solo factor salía una vez cada mil casos y los mutantes de cada condición sobrevivían.
+- **Código redundante quitado.** No era defensa: sólo daba mutantes equivalentes.
+  - El tamaño del artefacto: un SHA-256 igual ya implica los mismos bytes.
+  - La revalidación de cuenta y categorías antes de insertar: la inserción las valida en la misma transacción.
+  - El largo del identificador del lote: la consulta es parametrizada y la respuesta es la misma.
+  - La reescritura condicional del componente: instalar siempre lo reescribe.
+  - El `JSON.parse` duplicado: ahora es una sola función, en la que lo dañado da un objeto vacío.
 

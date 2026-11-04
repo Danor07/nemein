@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   LIMITS,
   encodeRequest,
+  installedCommand,
   interpret,
   responseReader,
   runConnector,
@@ -726,6 +727,21 @@ processTest("run: a supervisor that cannot start fails closed", async (t) => {
       return code("CONNECTOR_SUPERVISOR_FAILED")(error);
     },
   );
+});
+
+test("the installed supervisor is found next to nemein.exe, and only there", (t) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "nemein-installed-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const node = path.join(root, "runtime", "node.exe");
+  assert.equal(installedCommand(node), undefined, "not installed yet");
+  writeFileSync(path.join(root, "nemein-connector.exe"), "binario ficticio");
+  assert.equal(installedCommand(node), path.join(root, "nemein-connector.exe"));
+  assert.equal(
+    installedCommand(path.join(root, "Runtime", "node.exe")),
+    path.join(root, "nemein-connector.exe"),
+  );
+  assert.equal(installedCommand(path.join(root, "bin", "node.exe")), undefined);
+  assert.equal(installedCommand(path.join(root, "node.exe")), undefined);
 });
 
 test("run: only Windows runs connectors, and requests are checked before spawning", async () => {

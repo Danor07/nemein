@@ -212,7 +212,7 @@ export function attachAccess(budget) {
             if (actions[action].async)
               throw error(
                 "ASYNC_PROPOSAL_UNSUPPORTED",
-                "Los respaldos no admiten aprobación diferida.",
+                "Los respaldos y la ejecución de conectores se permiten o se niegan: no admiten aprobación diferida.",
               );
             if (
               typeof meta.purpose !== "string" ||
@@ -388,7 +388,7 @@ export function attachAccess(budget) {
     )
       throw error(
         "INVALID_RULE",
-        "Los respaldos no admiten aprobación diferida.",
+        "Los respaldos y la ejecución de conectores se permiten o se niegan: no admiten aprobación diferida.",
       );
     db.transaction(() => {
       run(
@@ -778,6 +778,51 @@ export function attachAccess(budget) {
       });
     };
     return Object.freeze(scoped);
+  };
+  // Connector administration belongs to the owner, like connections. Every
+  // step is audited, and an enablement holds only through its audit row.
+  const install = budget.installConnector,
+    enable = budget.enableConnector,
+    revoke = budget.revokeConnector;
+  const failed = (action, args, e) =>
+    audit("owner", action, args, "error", e.message || "La operación falló");
+  budget.installConnector = async (p) => {
+    owner();
+    try {
+      const result = await install(p);
+      audit(
+        "owner",
+        "connector-install",
+        { hash: result.hash, manifest: result.manifest },
+        "allow",
+        "Conector instalado, deshabilitado",
+      );
+      return result;
+    } catch (e) {
+      failed("connector-install", {}, e);
+      throw e;
+    }
+  };
+  budget.enableConnector = (p) => {
+    owner();
+    try {
+      return enable(p, (args) =>
+        Number(
+          audit("owner", "connector-enable", args, "allow", "Conector habilitado")
+            .lastInsertRowid,
+        ),
+      );
+    } catch (e) {
+      failed("connector-enable", { hash: p?.hash ?? null }, e);
+      throw e;
+    }
+  };
+  budget.revokeConnector = (p) => {
+    owner();
+    // The inventory first: the revocation holds even if auditing fails.
+    const result = revoke(p);
+    audit("owner", "connector-revoke", { hash: result.hash }, "allow", "Conector revocado");
+    return result;
   };
   return budget;
 }

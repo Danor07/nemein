@@ -8,6 +8,7 @@ const files = [
   "004-agent-access.sql",
   "005-audit-policy.sql",
   "006-reviews.sql",
+  "007-connector-batches.sql",
 ];
 export const schemaVersion = files.length;
 const migrations = files.map((name, i) => {
@@ -34,6 +35,8 @@ const columns = (db, table) =>
     .map((c) => c.name);
 const required = {
   reviews: "id,package_json,report,generated_by,generator,created_at,reviewed_at",
+  connector_batches:
+    "id,actor,component_hash,input_hash,config,account_id,batch,batch_hash,created_at,expires_at,confirmed_at,result",
   accounts: "id,name,type",
   groups_: "id,name",
   categories: "id,group_id,name",

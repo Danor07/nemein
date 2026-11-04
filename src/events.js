@@ -9,6 +9,7 @@ export const eventOperations = Object.freeze([
   "transfer",
   "reconcile",
   "importCsv",
+  "confirmConnectorImport",
   "categorize",
   "createGroup",
   "createCategory",

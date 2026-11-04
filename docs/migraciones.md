@@ -11,6 +11,8 @@ Al abrir un presupuesto, src/core.js llama a src/migrations.js antes de construi
 | 3 | 003-events.sql | Identidad y registro de eventos |
 | 4 | 004-agent-access.sql | Conexiones, reglas, auditoría, solicitudes y propuestas |
 | 5 | 005-audit-policy.sql | Regla aplicada en la auditoría |
+| 6 | 006-reviews.sql | Revisiones guardadas |
+| 7 | 007-connector-batches.sql | Lotes preparados por conectores, con su resultado de confirmación |
 
 La versión de esquema es independiente de la versión de la aplicación. schema_migrations guarda número, nombre, SHA-256 y fecha de incorporación. PRAGMA user_version guarda la última versión de esquema completada.
 

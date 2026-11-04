@@ -9,6 +9,7 @@ import { date } from "./date.js";
 export { date } from "./date.js";
 import { csvImportBatch, importIdentity } from "./import-contract.js";
 import { statementImportBatch } from "./statement-import.js";
+import { connectorImports } from "./connectors.js";
 
 import {
   mkdirSync,
@@ -54,7 +55,8 @@ const text = (v) => {
     throw Error("El nombre es obligatorio y admite hasta 160 caracteres.");
   return v.trim();
 };
-export function openBudget(dir = defaultDir()) {
+// `options.runConnector` replaces the enclosed connector runner (tests).
+export function openBudget(dir = defaultDir(), options = {}) {
   mkdirSync(dir, { recursive: true });
   const db = new Database(path.join(dir, "budget.db"));
   try {
@@ -328,20 +330,33 @@ export function openBudget(dir = defaultDir()) {
     if (!cat) throw Error("Elegí una categoría inicial para gastos sin memoria.");
     return cat;
   }
+  // Inserts reviewed import rows; a known import key is a duplicate. Shared
+  // by CSV, statements and connectors, inside the caller's transaction.
+  function insertImported(accountId, rows) {
+    let added = 0;
+    for (const row of rows) {
+      if (one("SELECT id FROM transactions WHERE import_key=?", row.import_key))
+        continue;
+      const id = addTransaction({
+        account_id: accountId,
+        date: row.date,
+        payee: row.payee,
+        amount: row.amount,
+        category_id: row.category_id,
+      });
+      run(
+        "UPDATE transactions SET import_key=?,cleared=1 WHERE id=?",
+        row.import_key,
+        id,
+      );
+      added++;
+    }
+    return { added, duplicates: rows.length - added };
+  }
   function importCsv(p) {
     return db.transaction(() => {
       const preview = csvPreview(p.content, p.config, p.account_id);
-      let added = 0;
-      for (const row of preview.rows) {
-        if (row.duplicate) continue;
-        const id = addTransaction({ ...row, account_id: p.account_id });
-        run(
-          "UPDATE transactions SET import_key=?,cleared=1 WHERE id=?",
-          row.import_key,
-          id,
-        );
-        added++;
-      }
+      const result = insertImported(p.account_id, preview.rows);
       // A statement has no columns to remember and must not replace the CSV mapping.
       if ((p.config.format ?? "csv") === "csv")
         run(
@@ -349,7 +364,7 @@ export function openBudget(dir = defaultDir()) {
           Number(p.account_id),
           JSON.stringify(p.config),
         );
-      return { added, duplicates: preview.rows.length - added };
+      return result;
     })();
   }
   function reports(m) {
@@ -485,5 +500,22 @@ export function openBudget(dir = defaultDir()) {
     },
     close: () => db.close(),
   };
+  // Connectors only parse: their categories are ignored, and the budget's
+  // memory or the owner's default decides, as for CSV.
+  const importDomain = {
+    project: (batch, cfg) =>
+      projectImport(
+        null, // no CSV headers
+        {
+          ...batch,
+          entries: batch.entries.map((e) => ({ ...e, category_id: null })),
+        },
+        cfg,
+      ).rows,
+    insert: insertImported,
+    account,
+    category,
+  };
+  Object.assign(budget, connectorImports(budget, importDomain, options).methods);
   return attachAccess(attachEvents(Object.assign(budget, planning(budget, { money, date, month, today })), { date, today, snapshotAt: cut => snapshot(cut.slice(0, 7), cut) }));
 }

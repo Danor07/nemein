@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { validateImportBatch } from "./import-contract.js";
 
@@ -182,7 +184,8 @@ function validateConnectorError(error) {
   return error;
 }
 
-function validateRequest({ op, component, input, config, accountId }) {
+// The request contract the worker enforces; exported for in-process stand-ins.
+export function validateRequest({ op, component, input, config, accountId }) {
   const invalid = (message) => fail("CONNECTOR_REQUEST_INVALID", message);
   if (op !== "describe" && op !== "parse")
     throw invalid("Operación de conector desconocida.");
@@ -285,6 +288,15 @@ export function interpret(frame, { op, accountId, expectedManifest }) {
   return { manifest, batch };
 }
 
+// The installed supervisor next to nemein.exe. The installed CLI and MCP run
+// <install>\runtime\node.exe, without the desktop shell's variable.
+export function installedCommand(execPath = process.execPath) {
+  const runtime = path.dirname(execPath);
+  if (path.basename(runtime).toLowerCase() !== "runtime") return undefined;
+  const candidate = path.join(path.dirname(runtime), "nemein-connector.exe");
+  return existsSync(candidate) ? candidate : undefined;
+}
+
 // Runs `op` on `component`. Resolves with `{manifest}` or `{manifest, batch}`;
 // rejects with an Error carrying `code`. `command` is the supervisor, as a path
 // or `[path, ...args]` (tests); production uses NEMEIN_CONNECTOR_BIN, set by
@@ -296,7 +308,7 @@ export function runConnector({
   config = "",
   accountId,
   expectedManifest,
-  command = process.env.NEMEIN_CONNECTOR_BIN,
+  command = process.env.NEMEIN_CONNECTOR_BIN ?? installedCommand(),
   platform = process.platform,
   timeoutMs = LIMITS.timeoutMs,
 }) {

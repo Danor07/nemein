@@ -53,7 +53,9 @@
         "review-package",
         "review-save",
         "review-list",
-        "review-get"
+        "review-get",
+        "connectors",
+        "connector-import"
       ]
     },
     "args": {
@@ -93,7 +95,8 @@
               "recurring-post",
               "recurring-toggle",
               "transaction-delete",
-              "review-save"
+              "review-save",
+              "connector-import"
             ]
           }
         }

@@ -33,4 +33,24 @@ if ($LASTEXITCODE -ne 0) { throw 'Installed connector smoke failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Windows credential tests failed after installation.' }
 $nativeData = Join-Path $env:RUNNER_TEMP ('nemein-native-' + [guid]::NewGuid().ToString('N'))
 & "$PSScriptRoot/smoke-desktop.ps1" -ExecutablePath $exe -DataDir $nativeData
-Write-Output 'CLEAN INSTALL OK: silent NSIS, Windows registry, Start menu target, installed MCP, installed connector, credentials, and native startup.'
+# The installed connector registered the worker's AppContainer profile; the
+# uninstaller deletes it (src-tauri/nsis/hooks.nsh).
+$profileDir = Join-Path $env:LOCALAPPDATA 'Packages\nemein.connectorworker'
+$mappings = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppContainer\Mappings'
+function Get-ConnectorProfileMapping {
+  @(Get-ChildItem -LiteralPath $mappings -ErrorAction SilentlyContinue | Where-Object { (Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).Moniker -eq 'nemein.connectorworker' })
+}
+if (!(Test-Path -LiteralPath $profileDir)) { throw 'The installed connector did not create its AppContainer folder.' }
+if (!(Get-ConnectorProfileMapping).Count) { throw 'The installed connector did not register its AppContainer profile.' }
+$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nemein'
+$uninstall = Start-Process -FilePath (Join-Path $installedRoot 'uninstall.exe') -ArgumentList '/S' -WindowStyle Hidden -PassThru
+if (-not $uninstall.WaitForExit(180000)) { Stop-Process -Id $uninstall.Id -Force; throw 'Silent uninstallation exceeded three minutes.' }
+if ($uninstall.ExitCode -ne 0) { throw "The NSIS uninstaller exited with $($uninstall.ExitCode)" }
+# NSIS runs the uninstaller from a temporary copy and returns at once: wait for its effects.
+$deadline = (Get-Date).AddMinutes(3)
+while ((Get-Date) -lt $deadline -and ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $profileDir) -or (Get-ConnectorProfileMapping).Count)) { Start-Sleep -Milliseconds 500 }
+if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstallation left its registry entry.' }
+if (Test-Path -LiteralPath $exe) { throw 'Uninstallation left nemein.exe.' }
+if ((Get-ConnectorProfileMapping).Count) { throw 'Uninstallation left the connector AppContainer profile registered.' }
+if (Test-Path -LiteralPath $profileDir) { throw 'Uninstallation left the connector AppContainer folder.' }
+Write-Output 'CLEAN INSTALL OK: silent NSIS, Windows registry, Start menu target, installed MCP, installed connector, credentials, native startup, and silent uninstall without the connector profile.'

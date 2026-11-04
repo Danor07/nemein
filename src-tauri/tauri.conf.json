@@ -32,7 +32,8 @@
         "languages": [
           "Spanish"
         ],
-        "compression": "zlib"
+        "compression": "zlib",
+        "installerHooks": "./nsis/hooks.nsh"
       }
     }
   }

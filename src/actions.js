@@ -123,6 +123,23 @@ export const actions = Object.freeze({
     label: "Consultar movimientos de una cuenta",
     mode: "account",
   },
+  connectors: {
+    method: "listConnectors",
+    label: "Consultar conectores instalados",
+  },
+  // Runs third-party code on the file outside every transaction: allow or
+  // deny, never a deferred approval. It only stores a batch to review.
+  "connector-prepare": {
+    method: "prepareConnectorImport",
+    label: "Ejecutar un conector sobre un archivo",
+    async: true,
+    account: "account_id",
+  },
+  "connector-import": {
+    method: "confirmConnectorImport",
+    label: "Confirmar importación de un conector",
+    write: true,
+  },
 });
 export const actionVersion = 1;
 // Existing connection operations have no financial permission of their own.

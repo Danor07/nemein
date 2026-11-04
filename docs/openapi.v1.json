@@ -4773,6 +4773,435 @@
         }
       }
     },
+    "/api/v1/connectors": {
+      "post": {
+        "operationId": "connectors",
+        "summary": "Consultar conectores instalados",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Nemein-Connection-Version",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,40}$",
+              "default": "1"
+            },
+            "description": "P1 connection version, independent of API and action versions."
+          }
+        ],
+        "x-nemein-action": "connectors",
+        "x-nemein-action-version": 1,
+        "x-nemein-write": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/connectorsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action result, including a pending proposal. JSON result structures without an existing schema remain open; domain validation still applies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "result"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "result": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/connector-prepare": {
+      "post": {
+        "operationId": "connector-prepare",
+        "summary": "Ejecutar un conector sobre un archivo",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Nemein-Connection-Version",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,40}$",
+              "default": "1"
+            },
+            "description": "P1 connection version, independent of API and action versions."
+          }
+        ],
+        "x-nemein-action": "connector-prepare",
+        "x-nemein-action-version": 1,
+        "x-nemein-write": false,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/connector-prepareRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action result, including a pending proposal. JSON result structures without an existing schema remain open; domain validation still applies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "result"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "result": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/connector-import": {
+      "post": {
+        "operationId": "connector-import",
+        "summary": "Confirmar importación de un conector",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Nemein-Connection-Version",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9._-]{1,40}$",
+              "default": "1"
+            },
+            "description": "P1 connection version, independent of API and action versions."
+          }
+        ],
+        "x-nemein-action": "connector-import",
+        "x-nemein-action-version": 1,
+        "x-nemein-write": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/connector-importRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action result, including a pending proposal. JSON result structures without an existing schema remain open; domain validation still applies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "result"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "const": true
+                    },
+                    "result": {}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error with a stable code; message is for people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/permissions": {
       "post": {
         "operationId": "permissions",
@@ -5489,6 +5918,7 @@
               "transfer",
               "reconcile",
               "importCsv",
+              "confirmConnectorImport",
               "categorize",
               "createGroup",
               "createCategory",
@@ -6306,7 +6736,9 @@
               "review-package",
               "review-save",
               "review-list",
-              "review-get"
+              "review-get",
+              "connectors",
+              "connector-import"
             ]
           },
           "args": {
@@ -6346,7 +6778,8 @@
                     "recurring-post",
                     "recurring-toggle",
                     "transaction-delete",
-                    "review-save"
+                    "review-save",
+                    "connector-import"
                   ]
                 }
               }
@@ -8191,6 +8624,136 @@
         "properties": {
           "arguments": {
             "$ref": "#/components/schemas/account-transactionsArguments"
+          },
+          "base": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "request_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "connectorsArguments": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "connectorsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arguments"
+        ],
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/connectorsArguments"
+          },
+          "base": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "request_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "connector-prepareArguments": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string"
+          },
+          "account_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "content_base64": {
+            "type": "string"
+          },
+          "config": {
+            "type": "string"
+          },
+          "category_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "hash",
+          "account_id",
+          "content_base64"
+        ],
+        "additionalProperties": false
+      },
+      "connector-prepareRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arguments"
+        ],
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/connector-prepareArguments"
+          },
+          "base": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "request_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "connector-importArguments": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "batch_sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "batch_sha256"
+        ],
+        "additionalProperties": false
+      },
+      "connector-importRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "arguments",
+          "base"
+        ],
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/connector-importArguments"
           },
           "base": {
             "type": "string",
