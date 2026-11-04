@@ -2,6 +2,7 @@
 // platform: it answers describe and parse as the worker would, with the
 // fictitious bank example. Fictitious data only.
 import { readFileSync } from "node:fs";
+import { validateRequest } from "../../src/connector-runner.js";
 
 export const example = (name) =>
   readFileSync(
@@ -23,10 +24,13 @@ export const batchFor = (accountId) => ({
 });
 
 // `answer(request)` may return { manifest, batch } or throw; calls are kept.
+// Requests are held to the worker's own contract, with runConnector's
+// defaults.
 export function fakeRunner(answer) {
   const calls = [];
   const run = async (request) => {
     calls.push(request);
+    validateRequest({ input: Buffer.alloc(0), config: "", ...request });
     if (answer) return answer(request);
     return request.op === "describe"
       ? { manifest }

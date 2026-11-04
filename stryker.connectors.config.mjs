@@ -9,7 +9,7 @@ export default {
     "src/connectors.js",
     "src/core.js:335-355",
     "src/core.js:505-519",
-    "src/access.js:784-824",
+    "src/access.js:784-826",
   ],
   commandRunner: {
     command:

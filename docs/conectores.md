@@ -198,8 +198,8 @@ Un inventario que no cumple esa forma, porque el JSON está roto, tiene campos d
 
 ### Administración del propietario
 
-- **Instalar** recibe el componente en base64 canónico, de hasta 16 MiB. Ejecuta `describe` dentro del encierro, fuera de toda transacción, guarda el componente bajo su hash y lo deja **deshabilitado**. Reinstalar los mismos bytes es el mismo conector. Una versión nueva es otro hash y necesita su propia habilitación.
-- **Habilitar** comprueba que el componente en disco sigue teniendo el hash aprobado. Después escribe la fila de auditoría `connector-enable` con el hash y un testigo aleatorio, y por último guarda en el inventario el testigo y la secuencia de esa fila.
+- **Instalar** recibe el componente en base64 canónico, de hasta 16 MiB. Ejecuta `describe` dentro del encierro, fuera de toda transacción, guarda el componente bajo su hash y lo deja **deshabilitado**. Reinstalar los mismos bytes es el mismo conector: vuelve a escribir el componente, así que repara uno cambiado en disco sin tocar su habilitación. Una versión nueva es otro hash y necesita su propia habilitación.
+- **Habilitar** comprueba que el componente en disco sigue teniendo el hash aprobado; si no, falla sin escribir una fila que permita. Después escribe la fila de auditoría `connector-enable` con el hash y un testigo aleatorio, y por último guarda en el inventario el testigo y la secuencia de esa fila.
 - **Revocar** escribe primero el inventario, para que la revocación valga aunque falle la auditoría, y después la audita.
 
 Las tres operaciones exigen al propietario con la misma guarda que las conexiones (`OWNER_REQUIRED`). No están en la fachada del agente ni en la CLI, el MCP o la API local.
@@ -208,7 +208,9 @@ Las tres operaciones exigen al propietario con la misma guarda que las conexione
 1. el inventario es de este presupuesto (la identidad de `event_identity`);
 2. existe la fila de auditoría de esa secuencia;
 3. esa fila es `connector-enable` del propietario, con ese hash y ese testigo;
-4. no hay una revocación posterior del mismo conector.
+4. no hay una revocación posterior del mismo conector, aunque después se copie de vuelta un inventario anterior a ella.
+
+Cada paso deja su fila: `connector-install` con el hash y el manifiesto, `connector-enable` con el hash y el testigo, y `connector-revoke` con el hash. Un fallo deja una fila `error` con lo pedido y su motivo.
 
 ### Acciones públicas
 
@@ -230,16 +232,17 @@ Como no admite una aprobación diferida, `connector-prepare` no acepta una regla
 6. Se guarda el lote con esas categorías fijas, el hash del componente, el del archivo, la configuración, la cuenta y el actor. Vence en 24 h.
 7. La respuesta incluye `id`, `batch_sha256`, el vencimiento, el conector y las filas con su marca de duplicado.
 
-Hay un tope de 4 lotes sin confirmar por actor y de 64 MiB entre todos (`CONNECTOR_BATCH_LIMIT`). Cada preparación borra los lotes vencidos y los confirmados hace más de 30 días.
+Hay un tope de 4 lotes sin confirmar por actor y de 64 MiB entre todos, contados en bytes (`CONNECTOR_BATCH_LIMIT`). Cada preparación borra los lotes vencidos y los confirmados hace más de 30 días.
 
 ### Confirmar
 
-`connector-import` confirma **el lote guardado**, nunca filas que mande quien llama. Lo hace en una transacción corta, que vuelve a comprobar todo:
+`connector-import` confirma **el lote guardado**, nunca filas que mande quien llama. Lo hace dentro de la transacción inmediata que `src/events.js` abre para cada cambio del presupuesto, y vuelve a comprobar todo:
 - el lote existe y es del mismo actor (si no, `CONNECTOR_BATCH_UNKNOWN`, sin revelar si existe);
 - `batch_sha256` es el del lote revisado, y el lote guardado todavía tiene ese hash (si no, `CONNECTOR_BATCH_MISMATCH`);
 - no venció (`CONNECTOR_BATCH_EXPIRED`);
 - el conector sigue habilitado y su componente no cambió;
-- el contrato v1, la cuenta y cada categoría siguen siendo válidos. Las categorías no se recalculan desde una memoria que pudo cambiar.
+- el contrato v1 se cumple y la cuenta de la fila es la que declara el lote revisado (`CONNECTOR_ACCOUNT_MISMATCH`);
+- la inserción vuelve a validar la cuenta y cada categoría. Las categorías no se recalculan desde una memoria que pudo cambiar.
 
 Los duplicados se omiten por `import_key`. El resultado `{added, duplicates}` se guarda en la misma transacción. Un reintento con el mismo hash devuelve ese resultado sin volver a importar, y el lote queda sin filas.
 
@@ -271,10 +274,17 @@ El ejecutor usa `NEMEIN_CONNECTOR_BIN`, que define el shell de escritorio. La CL
 
 ### Pruebas del flujo (P3.3)
 
-Las pruebas usan un sustituto del trabajador dentro del proceso (`test/helpers/connector-budget.js`), así que corren en cualquier sistema:
+Las pruebas usan un sustituto del trabajador dentro del proceso (`test/helpers/connector-budget.js`), así que corren en cualquier sistema. El sustituto rechaza las solicitudes que rechazaría el trabajador, con la misma validación (`validateRequest`):
 - **Regresión** (`test/connectors.test.js`):
   - instalación por hash, deshabilitada e idempotente;
-  - sólo el propietario administra;
+  - la fila de auditoría exacta de cada paso y de cada fallo, también uno sin mensaje;
+  - sólo el propietario administra, y el código que corre durante la solicitud de un agente tampoco puede hacerlo;
+  - habilitar y revocar tocan sólo su conector, cada habilitación con su testigo;
+  - un inventario copiado de vuelta después de revocar no revive el conector;
+  - un componente cambiado sin cambiar de tamaño, y su reparación al reinstalar;
+  - base64 acotado por su largo antes de decodificarlo;
+  - configuración en su tope de bytes y uno más, hashes con caracteres alrededor;
+  - un lote que declara otra cuenta, y una fila guardada movida a otra cuenta;
   - la preparación fuera de transacciones, con los bytes y el manifiesto aprobados;
   - categorías del conector ignoradas y categorías revisadas fijas;
   - confirmación única con reintentos;
@@ -282,18 +292,19 @@ Las pruebas usan un sustituto del trabajador dentro del proceso (`test/helpers/c
   - un conector revocado, cambiado en disco o revocado mientras corre;
   - el vencimiento exacto;
   - una versión nueva que no duplica movimientos;
-  - los topes y la purga;
+  - los topes y la purga, con el tope en bytes entre actores en su borde exacto;
   - agentes con permitir, preguntar y propuestas;
   - recuperación desde copias anteriores y posteriores, y una carpeta copiada a otro presupuesto;
   - un inventario dañado.
 - **Propiedades:**
-  - la habilitación contra un oráculo escrito aparte;
+  - la habilitación contra un oráculo escrito aparte, con cada hecho correcto casi siempre, así que los fallos de un solo factor son frecuentes;
   - el hash canónico del lote;
   - base64 canónico;
-  - el inventario válido frente a cualquier campo dañado;
+  - el inventario válido, con sus bordes, frente a cualquier campo dañado;
   - la confirmación con duplicados al azar.
 - **Fuzzing:** un conector mentiroso con lotes editados al azar, argumentos de confirmación arbitrarios e inventarios dañados. El resultado tiene que ser un lote válido o un rechazo, nunca un error de tipo, y con un inventario dañado no corre ningún conector.
 - **Migración 007:** actualización desde el esquema 6 con datos, reversión ante una tabla en conflicto y reapertura.
+- **Mutación:** el alcance `connectors` de Stryker mide este módulo, la inserción compartida y la administración del propietario, con mínimo del 90 % y sin timeouts. La medición está en [Control de calidad](calidad.md#conectores-wasm-p33).
 
 ### Pruebas del trabajador encerrado
 

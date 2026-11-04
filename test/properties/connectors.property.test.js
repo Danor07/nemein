@@ -11,6 +11,7 @@ import {
   sha256,
   validateInventory,
 } from "../../src/connectors.js";
+import { LIMITS } from "../../src/connector-runner.js";
 import { openBudget } from "../../src/core.js";
 import {
   base64,
@@ -23,75 +24,77 @@ import {
 const hex = fc.stringMatching(/^[0-9a-f]{64}$/);
 
 test("PBT: an enablement holds exactly when this budget's audit recorded it", () => {
-  // The oracle states the rule in one boolean expression, apart from the code.
+  // Every fact is right most of the time, so single faults are frequent. The
+  // oracle states the rule in one boolean expression, apart from the code.
+  const mostly = (good, ...bad) =>
+    fc.oneof(
+      { weight: 4, arbitrary: fc.constant(good) },
+      { weight: 1, arbitrary: fc.constantFrom(...bad) },
+    );
+  const other = (hex) => (hex[0] === "0" ? "1" : "0") + hex.slice(1);
   fc.assert(
     fc.property(
       hex,
       hex,
-      fc.boolean(),
-      fc.constantFrom("urn:a", "urn:b"),
-      fc.constantFrom("urn:a", "urn:b"),
-      fc.boolean(),
-      fc.option(
-        fc.record({
-          actor: fc.constantFrom("owner", "agente"),
-          action: fc.constantFrom("connector-enable", "connector-revoke"),
-          decision: fc.constantFrom("allow", "error"),
-          hash: fc.boolean(),
-          token: fc.boolean(),
-          corrupt: fc.boolean(),
-        }),
-        { nil: undefined },
-      ),
-      (
-        hash,
-        token,
-        enabledEntry,
-        inventorySource,
-        source,
-        revokedAfter,
-        row,
-      ) => {
+      fc.record({
+        enabledEntry: mostly(true, false),
+        sameSource: mostly(true, false),
+        revokedAfter: mostly(false, true),
+        row: mostly(true, false),
+        actor: mostly("owner", "agente", "Owner"),
+        action: mostly("connector-enable", "connector-revoke", "connectors"),
+        decision: mostly("allow", "error", "deny"),
+        args: mostly(
+          "valid",
+          "other-hash",
+          "other-token",
+          "swapped",
+          "empty",
+          "{",
+          "null",
+          "7",
+          '"texto"',
+        ),
+      }),
+      (hash, token, f) => {
         const entry = {
           hash,
-          enablement: enabledEntry
+          enablement: f.enabledEntry
             ? { token, audit: 7, at: "2026-11-04T00:00:00Z" }
             : null,
         };
-        const enabled = row && {
-          actor: row.actor,
-          action: row.action,
-          decision: row.decision,
-          args: row.corrupt
-            ? "{"
-            : JSON.stringify({
-                hash: row.hash ? hash : "0".repeat(64),
-                token: row.token ? token : "1".repeat(64),
-              }),
-        };
+        const args =
+          {
+            valid: JSON.stringify({ hash, token }),
+            "other-hash": JSON.stringify({ hash: other(hash), token }),
+            "other-token": JSON.stringify({ hash, token: other(token) }),
+            swapped: JSON.stringify({ hash: token, token: hash }),
+            empty: "{}",
+          }[f.args] ?? f.args;
+        const enabled = f.row
+          ? { actor: f.actor, action: f.action, decision: f.decision, args }
+          : undefined;
         const expected =
-          enabledEntry &&
-          inventorySource === source &&
-          !revokedAfter &&
-          !!row &&
-          row.actor === "owner" &&
-          row.action === "connector-enable" &&
-          row.decision === "allow" &&
-          !row.corrupt &&
-          (row.hash || hash === "0".repeat(64)) &&
-          (row.token || token === "1".repeat(64));
+          f.enabledEntry &&
+          f.sameSource &&
+          !f.revokedAfter &&
+          f.row &&
+          f.actor === "owner" &&
+          f.action === "connector-enable" &&
+          f.decision === "allow" &&
+          (f.args === "valid" || (f.args === "swapped" && hash === token));
         assert.equal(
           enablementHolds(entry, {
-            inventorySource,
-            source,
+            inventorySource: "urn:a",
+            source: f.sameSource ? "urn:a" : "urn:b",
             enabled,
-            revokedAfter,
+            revokedAfter: f.revokedAfter,
           }),
           expected,
         );
       },
     ),
-    { seed: 630001, numRuns: 500 },
+    { seed: 630001, numRuns: 800 },
   );
 });
 
@@ -158,15 +161,19 @@ test("PBT: base64 decodes exactly the canonical encoding within the limit", () =
 });
 
 test("PBT: a valid inventory is accepted and any one damaged field fails closed", () => {
+  // The bounds themselves are valid, and generated often.
   const entry = fc.record({
     hash: hex,
     manifest: fc.constant(manifest),
-    size: fc.integer({ min: 1, max: 16 * 1024 * 1024 }),
+    size: fc.oneof(
+      fc.constantFrom(1, LIMITS.component),
+      fc.integer({ min: 1, max: LIMITS.component }),
+    ),
     installed_at: fc.constant("2026-11-04T12:00:00.000Z"),
     enablement: fc.option(
       fc.record({
         token: hex,
-        audit: fc.integer({ min: 1, max: 1e9 }),
+        audit: fc.oneof(fc.constant(1), fc.integer({ min: 1, max: 1e9 })),
         at: fc.constant("2026-11-04T12:00:00.000Z"),
       }),
       { nil: null },
@@ -174,10 +181,16 @@ test("PBT: a valid inventory is accepted and any one damaged field fails closed"
   });
   const damage = [
     (e) => ({ ...e, hash: e.hash.toUpperCase() + "g" }),
+    (e) => ({ ...e, hash: "x" + e.hash }),
+    (e) => ({ ...e, hash: e.hash + "0" }),
+    (e) => ({ ...e, hash: [e.hash] }),
     (e) => ({ ...e, size: 0 }),
-    (e) => ({ ...e, size: 16 * 1024 * 1024 + 1 }),
+    (e) => ({ ...e, size: LIMITS.component + 1 }),
     (e) => ({ ...e, size: 1.5 }),
     (e) => ({ ...e, installed_at: "ayer" }),
+    // Date.parse would read these; only text is a time.
+    (e) => ({ ...e, installed_at: 2026 }),
+    (e) => ({ ...e, installed_at: ["2026-11-04"] }),
     (e) => ({ ...e, manifest: { ...manifest, id: "Mayúsculas" } }),
     (e) => ({ ...e, enablement: { token: "x", audit: 1, at: e.installed_at } }),
     (e) => ({
@@ -199,6 +212,17 @@ test("PBT: a valid inventory is accepted and any one damaged field fails closed"
           connectors,
         };
         assert.equal(validateInventory(inventory), inventory);
+        for (const broken of [
+          null,
+          [],
+          { ...inventory, version: 2 },
+          { ...inventory, source: 7 },
+          { ...inventory, source: undefined },
+          { ...inventory, connectors: { ...connectors } },
+        ])
+          assert.throws(() => validateInventory(broken), {
+            code: "CONNECTOR_INVENTORY_INVALID",
+          });
         if (!connectors.length) return;
         const i = which % connectors.length;
         const broken = connectors.map((e, j) => (j === i ? damage[how](e) : e));

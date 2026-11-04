@@ -106,3 +106,27 @@ Las pruebas de Rust ubican los binarios junto a su propio ejecutable (`tests/com
 
 Stryker suma el alcance `connector-runner` sobre `src/connector-runner.js`. El supervisor falso termina solo a los 8 s, así que un mutante que deja colgado al ejecutor falla una aserción y no llega al plazo de Stryker.
 
+## Conectores WASM P3.3
+
+`stryker.connectors.config.mjs` agrega el alcance `connectors`, también en la matriz de mutación de CI. Mide:
+- `src/connectors.js` entero;
+- en `src/core.js`, la inserción compartida de importaciones y el dominio que ve el módulo;
+- en `src/access.js`, la guarda y la auditoría de instalar, habilitar y revocar.
+
+Primero corren las propiedades y el fuzzing de conectores. Después, la regresión de conectores y la de CSV, que comparte la inserción.
+
+La primera medición dio 80,91 % (97 sobrevivientes) y fue rechazada. La siguiente, sobre la entrega, dio **99,37 %**: 470 de 473 mutantes muertos, sin timeouts, errores ni mutantes sin cobertura. Los tres que sobreviven son equivalentes:
+- la bandera `wx` del archivo temporal (2): con un nombre aleatorio de 64 bits, ninguna prueba encuentra el archivo ya creado;
+- la codificación `utf8` al leer el inventario (1): `JSON.parse` lee igual el búfer.
+
+Para llegar ahí no se bajó el umbral ni se excluyeron operadores:
+- **Pruebas exactas:** filas de auditoría completas de cada paso y de cada fallo; código que intenta administrar durante la solicitud de un agente; bordes exactos (configuración de 16 KiB, tope de 64 MiB entre actores y 24 h de vencimiento escritas como fecha y no derivadas de la constante); hashes con caracteres alrededor; un componente cambiado sin cambiar de tamaño.
+- **Sustituto del trabajador:** ahora rechaza las solicitudes con la misma validación que el trabajador (`validateRequest`), así que un argumento inválido hacia el encierro falla también en las pruebas.
+- **Propiedad de habilitación:** cada hecho es correcto cuatro de cada cinco veces. Con hechos equiprobables, un fallo en un solo factor salía una vez cada mil casos y los mutantes de cada condición sobrevivían.
+- **Código redundante quitado.** No era defensa: sólo daba mutantes equivalentes.
+  - El tamaño del artefacto: un SHA-256 igual ya implica los mismos bytes.
+  - La revalidación de cuenta y categorías antes de insertar: la inserción las valida en la misma transacción.
+  - El largo del identificador del lote: la consulta es parametrizada y la respuesta es la misma.
+  - La reescritura condicional del componente: instalar siempre lo reescribe.
+  - El `JSON.parse` duplicado: ahora es una sola función, en la que lo dañado da un objeto vacío.
+

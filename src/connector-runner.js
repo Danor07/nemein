@@ -184,7 +184,8 @@ function validateConnectorError(error) {
   return error;
 }
 
-function validateRequest({ op, component, input, config, accountId }) {
+// The request contract the worker enforces; exported for in-process stand-ins.
+export function validateRequest({ op, component, input, config, accountId }) {
   const invalid = (message) => fail("CONNECTOR_REQUEST_INVALID", message);
   if (op !== "describe" && op !== "parse")
     throw invalid("Operación de conector desconocida.");

@@ -505,7 +505,7 @@ export function openBudget(dir = defaultDir(), options = {}) {
   const importDomain = {
     project: (batch, cfg) =>
       projectImport(
-        [],
+        null, // no CSV headers
         {
           ...batch,
           entries: batch.entries.map((e) => ({ ...e, category_id: null })),

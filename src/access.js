@@ -784,6 +784,8 @@ export function attachAccess(budget) {
   const install = budget.installConnector,
     enable = budget.enableConnector,
     revoke = budget.revokeConnector;
+  const failed = (action, args, e) =>
+    audit("owner", action, args, "error", e.message || "La operación falló");
   budget.installConnector = async (p) => {
     owner();
     try {
@@ -797,7 +799,7 @@ export function attachAccess(budget) {
       );
       return result;
     } catch (e) {
-      audit("owner", "connector-install", {}, "error", e.message || "La instalación falló");
+      failed("connector-install", {}, e);
       throw e;
     }
   };
@@ -811,7 +813,7 @@ export function attachAccess(budget) {
         ),
       );
     } catch (e) {
-      audit("owner", "connector-enable", { hash: p?.hash ?? null }, "error", e.message || "La habilitación falló");
+      failed("connector-enable", { hash: p?.hash ?? null }, e);
       throw e;
     }
   };

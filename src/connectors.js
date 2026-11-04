@@ -63,6 +63,14 @@ export function decodeBase64(text, limit, what) {
 const isHash = (value) => typeof value === "string" && HASH.test(value);
 const isTime = (value) =>
   typeof value === "string" && !Number.isNaN(Date.parse(value));
+// Stored JSON as an object; damaged or non-object text reads as an empty one.
+const parseObject = (text) => {
+  try {
+    return Object(JSON.parse(text));
+  } catch {
+    return {};
+  }
+};
 
 // The inventory as stored; anything else fails closed.
 export function validateInventory(inventory) {
@@ -127,13 +135,8 @@ export function enablementHolds(
     enabled.decision !== "allow"
   )
     return false;
-  let args;
-  try {
-    args = JSON.parse(enabled.args);
-  } catch {
-    return false;
-  }
-  return args?.hash === entry.hash && args?.token === enablement.token;
+  const args = parseObject(enabled.args);
+  return args.hash === entry.hash && args.token === enablement.token;
 }
 
 export function connectorStore(dir, db) {
@@ -151,13 +154,7 @@ export function connectorStore(dir, db) {
   function read() {
     if (!existsSync(inventoryFile))
       return { version: 1, source: source(), connectors: [] };
-    let parsed;
-    try {
-      parsed = JSON.parse(readFileSync(inventoryFile, "utf8"));
-    } catch {
-      parsed = null;
-    }
-    return validateInventory(parsed);
+    return validateInventory(parseObject(readFileSync(inventoryFile, "utf8")));
   }
   // Writing rebinds the inventory to this budget. Enablements recorded for
   // another budget never held here, and are dropped explicitly.
@@ -178,27 +175,18 @@ export function connectorStore(dir, db) {
   }
   const artifactFile = (hash) => path.join(root, hash, "component.wasm");
   function holds(inventory, entry) {
-    const enabled = entry.enablement
-      ? db
-          .prepare(
-            "SELECT actor,action,args,decision FROM agent_audit WHERE sequence=?",
-          )
-          .get(entry.enablement.audit)
-      : undefined;
-    const revokedAfter = entry.enablement
-      ? db
-          .prepare(
-            "SELECT args FROM agent_audit WHERE action='connector-revoke' AND actor='owner' AND decision='allow' AND sequence>?",
-          )
-          .all(entry.enablement.audit)
-          .some((row) => {
-            try {
-              return JSON.parse(row.args).hash === entry.hash;
-            } catch {
-              return false;
-            }
-          })
-      : false;
+    if (!entry.enablement) return false;
+    const enabled = db
+      .prepare(
+        "SELECT actor,action,args,decision FROM agent_audit WHERE sequence=?",
+      )
+      .get(entry.enablement.audit);
+    const revokedAfter = db
+      .prepare(
+        "SELECT args FROM agent_audit WHERE action='connector-revoke' AND actor='owner' AND decision='allow' AND sequence>?",
+      )
+      .all(entry.enablement.audit)
+      .some((row) => parseObject(row.args).hash === entry.hash);
     return enablementHolds(entry, {
       inventorySource: inventory.source,
       source: source(),
@@ -229,7 +217,8 @@ export function connectorStore(dir, db) {
         "Falta el componente aprobado. Reinstalalo.",
       );
     }
-    if (bytes.length !== entry.size || sha256(bytes) !== entry.hash)
+    // Equal SHA-256 means equal bytes; the size adds nothing to it.
+    if (sha256(bytes) !== entry.hash)
       throw fail(
         "CONNECTOR_ARTIFACT_CHANGED",
         "El componente cambió después de aprobarlo. Reinstalalo.",
@@ -243,15 +232,18 @@ export function connectorStore(dir, db) {
       throw fail("CONNECTOR_DISABLED", "El conector no está habilitado.");
     return { entry, bytes: artifact(entry) };
   }
-  const summary = (inventory, entry) => ({
-    hash: entry.hash,
-    manifest: entry.manifest,
-    size: entry.size,
-    installed_at: entry.installed_at,
-    enabled: holds(inventory, entry),
-    // Recorded as enabled, but not by this budget's current history.
-    invalidated: !!entry.enablement && !holds(inventory, entry),
-  });
+  const summary = (inventory, entry) => {
+    const enabled = holds(inventory, entry);
+    return {
+      hash: entry.hash,
+      manifest: entry.manifest,
+      size: entry.size,
+      installed_at: entry.installed_at,
+      enabled,
+      // Recorded as enabled, but not by this budget's current history.
+      invalidated: !!entry.enablement && !enabled,
+    };
+  };
   return {
     root,
     list() {
@@ -261,16 +253,13 @@ export function connectorStore(dir, db) {
     find,
     usable,
     artifact,
-    // Stores the component under its hash and lists it disabled.
+    // Stores the component under its hash and lists it disabled. Installing
+    // the same bytes again rewrites them: that repairs a changed artifact.
     install(bytes, manifest, now) {
       const hash = sha256(bytes);
       const inventory = read();
       const known = inventory.connectors.find((c) => c.hash === hash);
-      if (
-        !existsSync(artifactFile(hash)) ||
-        sha256(readFileSync(artifactFile(hash))) !== hash
-      )
-        write(artifactFile(hash), bytes);
+      write(artifactFile(hash), bytes);
       if (known) return summary(inventory, known);
       const entry = {
         hash,
@@ -283,9 +272,9 @@ export function connectorStore(dir, db) {
       return summary(read(), entry);
     },
     newToken: () => randomBytes(32).toString("hex"),
+    // The caller checks the artifact before it audits the enablement.
     enable(hash, token, audit, now) {
-      const { inventory, entry } = find(hash);
-      artifact(entry);
+      const { inventory } = find(hash);
       save({
         ...inventory,
         connectors: inventory.connectors.map((c) =>
@@ -315,7 +304,8 @@ export function connectorImports(budget, domain, options = {}) {
   const store = connectorStore(budget.dir, db);
   const run = options.runConnector ?? runConnector;
   const now = options.now ?? (() => new Date());
-  const actor = () => budget.reviewAuthor?.() ?? "owner";
+  // access.js names the actor: the owner, or the agent's connection.
+  const actor = () => budget.reviewAuthor();
   const one = (sql, ...args) => db.prepare(sql).get(...args);
   const purge = (at) => {
     db.prepare(
@@ -369,7 +359,6 @@ export function connectorImports(budget, domain, options = {}) {
         category_id: row.category_id,
       })),
     };
-    validateImportBatch(stored);
     const text = canonicalJson(stored);
     const batchHash = sha256(text);
     const at = now();
@@ -377,8 +366,9 @@ export function connectorImports(budget, domain, options = {}) {
     const expires = new Date(at.getTime() + CONNECTOR_LIMITS.batchTtlMs);
     db.transaction(() => {
       purge(at);
+      // Bytes, not characters; octet_length reads only the record header.
       const pending = one(
-        "SELECT COUNT(*) n, COALESCE(SUM(LENGTH(batch)),0) bytes FROM connector_batches WHERE confirmed_at IS NULL",
+        "SELECT COALESCE(SUM(octet_length(batch)),0) bytes FROM connector_batches WHERE confirmed_at IS NULL",
       );
       const mine = one(
         "SELECT COUNT(*) n FROM connector_batches WHERE confirmed_at IS NULL AND actor=?",
@@ -417,14 +407,15 @@ export function connectorImports(budget, domain, options = {}) {
     };
   }
 
-  // Confirms the stored batch, never rows from the caller, in one short
-  // transaction: the reviewed hash, the actor, the expiry, the connector's
-  // enablement and bytes, the batch contract and categories, and duplicates
-  // are all checked again. A retry returns the stored result.
+  // Confirms the stored batch, never rows from the caller, inside the
+  // immediate transaction events.js opens for every budget change: the
+  // reviewed hash, the actor, the expiry, the connector's enablement and
+  // bytes, the batch contract, the account, categories and duplicates are all
+  // checked again. A retry returns the stored result.
   function confirmConnectorImport(p = {}) {
     const unknown = () =>
       fail("CONNECTOR_BATCH_UNKNOWN", "El lote no existe o no es tuyo.");
-    if (typeof p.id !== "string" || p.id.length > 64) throw unknown();
+    if (typeof p.id !== "string") throw unknown();
     if (!isHash(p.batch_sha256))
       throw fail(
         "CONNECTOR_REQUEST_INVALID",
@@ -452,9 +443,8 @@ export function connectorImports(budget, domain, options = {}) {
     const batch = validateImportBatch(JSON.parse(row.batch));
     if (batch.account_id !== row.account_id)
       throw fail("CONNECTOR_ACCOUNT_MISMATCH", "El lote declara otra cuenta.");
-    domain.account(row.account_id);
-    for (const e of batch.entries)
-      if (e.category_id !== null) domain.category(e.category_id);
+    // The insertion checks the account and categories again, inside the
+    // caller's transaction.
     const result = domain.insert(
       row.account_id,
       batch.entries.map((e) => ({

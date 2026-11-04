@@ -12,7 +12,8 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { openBudget } from "../src/core.js";
-import { CONNECTOR_LIMITS } from "../src/connectors.js";
+import { LIMITS } from "../src/connector-runner.js";
+import { CONNECTOR_LIMITS, decodeBase64 } from "../src/connectors.js";
 import {
   base64,
   batchFor,
@@ -72,6 +73,20 @@ const audits = (b, action) =>
   b.db
     .prepare("SELECT * FROM agent_audit WHERE action=? ORDER BY sequence")
     .all(action);
+// The owner's audit rows for one action, as {args, decision, reason}.
+const trail = (b, action) =>
+  audits(b, action).map((a) => {
+    assert.equal(a.actor, "owner");
+    return {
+      args: JSON.parse(a.args),
+      decision: a.decision,
+      reason: a.reason,
+    };
+  });
+const inventoryOf = (dir) =>
+  JSON.parse(
+    readFileSync(path.join(dir, "connectors", "inventory.json"), "utf8"),
+  );
 
 test("install describes the component enclosed, stores it by hash and lists it disabled", async (t) => {
   const { b, run, dir } = fixture(t);
@@ -96,16 +111,71 @@ test("install describes the component enclosed, stores it by hash and lists it d
     entry,
   );
   assert.equal(b.listConnectors().length, 1);
-  assert.equal(
-    audits(b, "connector-install").filter((a) => a.decision === "allow").length,
-    2,
-  );
-  // Strict base64 and the component limit.
+  assert.equal(run.calls[1].accountId, "1", "describe names a valid account");
+  const installedRow = {
+    args: { hash: entry.hash, manifest },
+    decision: "allow",
+    reason: "Conector instalado, deshabilitado",
+  };
+  assert.deepEqual(trail(b, "connector-install"), [installedRow, installedRow]);
+  // Strict base64 and the component limit; each refusal is audited.
+  const refusals = [];
   for (const bad of ["no es base64!", "QQ", 1, "Q".repeat(23_000_000)])
+    await assert.rejects(b.installConnector({ component_base64: bad }), (e) => {
+      coded("CONNECTOR_REQUEST_INVALID")(e);
+      assert.match(e.message, /^El componente /);
+      refusals.push({ args: {}, decision: "error", reason: e.message });
+      return true;
+    });
+  assert.deepEqual(trail(b, "connector-install").slice(2), refusals);
+  assert.equal(run.calls.length, 2, "nothing invalid reached the worker");
+});
+
+test("a failed install is audited with its reason, or a generic one", async (t) => {
+  const failures = [
+    Object.assign(new Error("El componente no responde."), { code: "X" }),
+    new Error(""),
+  ];
+  const run = fakeRunner(async () => {
+    throw failures.shift();
+  });
+  const { b, dir } = fixture(t, { runConnector: run });
+  for (let i = 0; i < 2; i++)
     await assert.rejects(
-      b.installConnector({ component_base64: bad }),
-      coded("CONNECTOR_REQUEST_INVALID"),
+      b.installConnector({
+        component_base64: base64(component),
+      }),
     );
+  assert.deepEqual(trail(b, "connector-install"), [
+    { args: {}, decision: "error", reason: "El componente no responde." },
+    { args: {}, decision: "error", reason: "La operación falló" },
+  ]);
+  assert.equal(existsSync(path.join(dir, "connectors")), false);
+});
+
+test("base64 is bounded by its length before it is decoded", () => {
+  // Longer than any encoding within the limit: refused as too long,
+  // whatever it holds.
+  assert.throws(() => decodeBase64("!".repeat(8), 3, "El archivo"), {
+    code: "CONNECTOR_REQUEST_INVALID",
+    message: "El archivo supera su límite.",
+  });
+  // Short enough to be read, but more bytes than the limit.
+  assert.throws(
+    () => decodeBase64(Buffer.alloc(5).toString("base64"), 4, "El archivo"),
+    {
+      code: "CONNECTOR_REQUEST_INVALID",
+      message: "El archivo supera su límite.",
+    },
+  );
+  assert.deepEqual(
+    decodeBase64(Buffer.alloc(4).toString("base64"), 4, "El archivo"),
+    Buffer.alloc(4),
+  );
+  assert.throws(() => decodeBase64("QQ", 4, "El archivo"), {
+    code: "CONNECTOR_REQUEST_INVALID",
+    message: "El archivo no es base64 válido.",
+  });
 });
 
 test("only the owner installs, enables and revokes; agents get the catalog actions only", async (t) => {
@@ -171,40 +241,86 @@ test("prepare runs the approved bytes outside every transaction and fixes the re
   );
   assert.ok(prepared.rows.every((r) => r.duplicate === false));
   assert.match(prepared.batch_sha256, /^[0-9a-f]{64}$/);
-  assert.equal(
-    prepared.expires_at,
-    new Date(
-      Date.parse("2026-11-04T12:00:00.000Z") + CONNECTOR_LIMITS.batchTtlMs,
-    ).toISOString(),
-  );
+  // A day to review it, also as a proposal.
+  assert.equal(prepared.expires_at, "2026-11-05T12:00:00.000Z");
+  assert.deepEqual(prepared.connector, { hash, manifest });
+  assert.equal(prepared.account_id, accountId);
+  const row = b.db
+    .prepare("SELECT * FROM connector_batches WHERE id=?")
+    .get(prepared.id);
+  assert.equal(row.actor, "owner");
+  assert.equal(row.config, "perfil=ficticio");
+  assert.equal(row.component_hash, hash);
   // Nothing reached the budget yet.
   assert.equal(b.accountTransactions(accountId).length, 0);
-  // Expenses without memory need the owner's default category.
-  await assert.rejects(prepare(b, hash, accountId), /categoría/);
+  // Without config the worker gets an empty one; the limit is in bytes.
+  run.calls.length = 0;
+  await prepare(b, hash, accountId, { category_id: category });
+  await prepare(b, hash, accountId, {
+    category_id: category,
+    config: "c".repeat(LIMITS.config),
+  });
+  assert.deepEqual(
+    run.calls.map((c) => c.config.length),
+    [0, LIMITS.config],
+  );
+  // Expenses without memory need the owner's default category: none given,
+  // or none on purpose.
+  for (const category_id of [undefined, null])
+    await assert.rejects(
+      prepare(b, hash, accountId, { category_id }),
+      /categoría inicial/,
+    );
   // Requests are checked before anything runs.
   run.calls.length = 0;
   await assert.rejects(prepare(b, hash, 999), /cuenta/);
   await assert.rejects(
     prepare(b, hash, accountId, { content_base64: "%%%" }),
-    coded("CONNECTOR_REQUEST_INVALID"),
+    (e) =>
+      coded("CONNECTOR_REQUEST_INVALID")(e) &&
+      e.message === "El archivo no es base64 válido.",
   );
-  await assert.rejects(
-    prepare(b, hash, accountId, { config: "c".repeat(16_385) }),
-    coded("CONNECTOR_REQUEST_INVALID"),
-  );
+  for (const config of ["c".repeat(LIMITS.config + 1), "ñ".repeat(8193), 5])
+    await assert.rejects(
+      prepare(b, hash, accountId, { config }),
+      coded("CONNECTOR_REQUEST_INVALID"),
+    );
   await assert.rejects(
     prepare(b, "a".repeat(64), accountId, { category_id: category }),
     coded("CONNECTOR_UNKNOWN"),
   );
-  await assert.rejects(
-    prepare(b, "no-es-hash", accountId, { category_id: category }),
-    coded("CONNECTOR_REQUEST_INVALID"),
-  );
+  // Exactly a lowercase SHA-256, nothing around it.
+  for (const bad of ["no-es-hash", "x" + hash, hash + "0", [hash]])
+    await assert.rejects(
+      prepare(b, bad, accountId, { category_id: category }),
+      coded("CONNECTOR_REQUEST_INVALID"),
+    );
   await assert.rejects(
     prepare(b, hash, accountId, { category_id: 999 }),
-    /categoría/,
+    /categoría no existe/,
   );
   assert.equal(run.calls.length, 0);
+});
+
+test("a batch for another account than the one chosen is refused", async (t) => {
+  const run = fakeRunner(async (request) =>
+    request.op === "describe"
+      ? { manifest }
+      : { manifest, batch: batchFor(Number(request.accountId) + 1) },
+  );
+  const { b, accountId, category } = fixture(t, { runConnector: run });
+  b.createAccount({ name: "Otra ficticia", type: "efectivo" });
+  const hash = await installed(b);
+  await assert.rejects(
+    prepare(b, hash, accountId, { category_id: category }),
+    (e) =>
+      coded("CONNECTOR_ACCOUNT_MISMATCH")(e) &&
+      e.message === "El lote declara otra cuenta.",
+  );
+  assert.equal(
+    b.db.prepare("SELECT COUNT(*) n FROM connector_batches").get().n,
+    0,
+  );
 });
 
 test("connectors only parse: their categories are ignored", async (t) => {
@@ -292,6 +408,33 @@ test("a confirmation that is not what was reviewed is refused", async (t) => {
       b.confirmConnectorImport({ id: 7, batch_sha256: prepared.batch_sha256 }),
     coded("CONNECTOR_BATCH_UNKNOWN"),
   );
+  assert.throws(
+    () =>
+      b.confirmConnectorImport({
+        id: prepared.id + "0".repeat(64),
+        batch_sha256: prepared.batch_sha256,
+      }),
+    coded("CONNECTOR_BATCH_UNKNOWN"),
+  );
+  // A stored row moved to another account: the batch the owner reviewed
+  // still names the first one.
+  const other = b.createAccount({ name: "Otra ficticia", type: "efectivo" });
+  const move = b.db.prepare(
+    "UPDATE connector_batches SET account_id=? WHERE id=?",
+  );
+  move.run(other, prepared.id);
+  assert.throws(
+    () =>
+      b.confirmConnectorImport({
+        id: prepared.id,
+        batch_sha256: prepared.batch_sha256,
+      }),
+    (e) =>
+      coded("CONNECTOR_ACCOUNT_MISMATCH")(e) &&
+      e.message === "El lote declara otra cuenta.",
+  );
+  assert.equal(b.accountTransactions(other).length, 0);
+  move.run(accountId, prepared.id);
   // Rows from the caller are not an input at all.
   assert.throws(
     () =>
@@ -420,6 +563,175 @@ test("a revoked or changed connector stops; so does an expired batch", async (t)
   );
 });
 
+test("enabling and revoking touch only their connector; audit rows record each step", async (t) => {
+  const { b, dir, accountId, category } = fixture(t);
+  const second = Buffer.from("segundo componente ficticio");
+  const a = (await b.installConnector({ component_base64: base64(component) }))
+    .hash;
+  const c = (await b.installConnector({ component_base64: base64(second) }))
+    .hash;
+  const state = () =>
+    Object.fromEntries(
+      b.listConnectors().map((e) => [e.hash, [e.enabled, e.invalidated]]),
+    );
+  assert.deepEqual(b.enableConnector({ hash: a }), { hash: a, enabled: true });
+  assert.deepEqual(state(), { [a]: [true, false], [c]: [false, false] });
+  const token = (hash) =>
+    inventoryOf(dir).connectors.find((e) => e.hash === hash).enablement.token;
+  const tokenA = token(a);
+  assert.match(tokenA, /^[0-9a-f]{64}$/);
+  b.enableConnector({ hash: c });
+  assert.notEqual(token(c), tokenA, "every enablement has its own token");
+  assert.deepEqual(b.revokeConnector({ hash: c }), { hash: c, enabled: false });
+  // A later revocation of another connector leaves this one enabled.
+  assert.deepEqual(state(), { [a]: [true, false], [c]: [false, false] });
+  await prepare(b, a, accountId, { category_id: category });
+  assert.deepEqual(trail(b, "connector-enable"), [
+    {
+      args: { hash: a, token: tokenA },
+      decision: "allow",
+      reason: "Conector habilitado",
+    },
+    {
+      args: {
+        hash: c,
+        token: JSON.parse(audits(b, "connector-enable")[1].args).token,
+      },
+      decision: "allow",
+      reason: "Conector habilitado",
+    },
+  ]);
+  assert.deepEqual(trail(b, "connector-revoke"), [
+    { args: { hash: c }, decision: "allow", reason: "Conector revocado" },
+  ]);
+  // Failed enablements are audited with what was asked.
+  assert.throws(
+    () => b.enableConnector({ hash: "f".repeat(64) }),
+    coded("CONNECTOR_UNKNOWN"),
+  );
+  assert.throws(() => b.enableConnector(), coded("CONNECTOR_REQUEST_INVALID"));
+  assert.deepEqual(trail(b, "connector-enable").slice(2), [
+    {
+      args: { hash: "f".repeat(64) },
+      decision: "error",
+      reason: "El conector no está instalado.",
+    },
+    {
+      args: { hash: null },
+      decision: "error",
+      reason: "El conector no es un hash válido.",
+    },
+  ]);
+});
+
+test("an inventory copied back after a revocation does not undo it", async (t) => {
+  const { b, dir, accountId, category } = fixture(t);
+  const hash = await installed(b);
+  const file = path.join(dir, "connectors", "inventory.json");
+  const enabled = readFileSync(file);
+  b.revokeConnector({ hash });
+  writeFileSync(file, enabled);
+  assert.deepEqual(
+    b.listConnectors().map(({ enabled, invalidated }) => ({
+      enabled,
+      invalidated,
+    })),
+    [{ enabled: false, invalidated: true }],
+  );
+  await assert.rejects(
+    prepare(b, hash, accountId, { category_id: category }),
+    coded("CONNECTOR_DISABLED"),
+  );
+  // Enabling again is a new audit row after the revocation: it holds.
+  b.enableConnector({ hash });
+  await prepare(b, hash, accountId, { category_id: category });
+});
+
+test("an artifact changed in place is refused; installing the same bytes repairs it", async (t) => {
+  const { b, dir, accountId, category } = fixture(t);
+  const hash = await installed(b);
+  const file = path.join(dir, "connectors", hash, "component.wasm");
+  // Same size, other bytes.
+  const tampered = Buffer.from(component);
+  tampered[0] ^= 1;
+  writeFileSync(file, tampered);
+  await assert.rejects(
+    prepare(b, hash, accountId, { category_id: category }),
+    coded("CONNECTOR_ARTIFACT_CHANGED"),
+  );
+  const enables = audits(b, "connector-enable").length;
+  assert.throws(
+    () => b.enableConnector({ hash }),
+    coded("CONNECTOR_ARTIFACT_CHANGED"),
+  );
+  assert.deepEqual(
+    audits(b, "connector-enable")
+      .slice(enables)
+      .map((a) => a.decision),
+    ["error"],
+    "no enablement is recorded for bytes that changed",
+  );
+  await b.installConnector({ component_base64: base64(component) });
+  assert.deepEqual(readFileSync(file), component);
+  // The enablement was never lost: it was the bytes that failed.
+  assert.equal(b.listConnectors()[0].enabled, true);
+  await prepare(b, hash, accountId, { category_id: category });
+});
+
+test("code that runs during an agent's request cannot administer connectors", async (t) => {
+  const state = { attempts: [] };
+  const run = fakeRunner(async (request) => {
+    if (request.op === "parse" && state.hash)
+      for (const attempt of [
+        () => state.budget.installConnector({ component_base64: base64("x") }),
+        async () => state.budget.enableConnector({ hash: state.hash }),
+        async () => state.budget.revokeConnector({ hash: state.hash }),
+      ])
+        await attempt().then(
+          () => state.attempts.push("allowed"),
+          (e) => state.attempts.push(e.code),
+        );
+    return request.op === "describe"
+      ? { manifest }
+      : { manifest, batch: batchFor(request.accountId) };
+  });
+  const { b, accountId, category } = fixture(t, { runConnector: run });
+  state.budget = b;
+  const hash = await installed(b);
+  const connection = b.createConnection({ label: "Agente ficticio" });
+  b.setRule({
+    connection_id: connection.id,
+    action: "connector-prepare",
+    decision: "allow",
+    conditions: {},
+  });
+  state.hash = hash;
+  const prepared = await b.forAgent(connection.token).prepareConnectorImport({
+    hash,
+    account_id: accountId,
+    content_base64: base64(statement),
+    category_id: category,
+  });
+  assert.deepEqual(state.attempts, [
+    "OWNER_REQUIRED",
+    "OWNER_REQUIRED",
+    "OWNER_REQUIRED",
+  ]);
+  // Nothing changed, and nothing was audited as the owner's.
+  assert.equal(b.listConnectors().length, 1);
+  assert.equal(b.listConnectors()[0].enabled, true);
+  assert.equal(audits(b, "connector-install").length, 1);
+  assert.equal(audits(b, "connector-enable").length, 1);
+  assert.equal(audits(b, "connector-revoke").length, 0);
+  // The agent's batch is stored under the agent, not the owner.
+  assert.equal(
+    b.db
+      .prepare("SELECT actor FROM connector_batches WHERE id=?")
+      .get(prepared.id).actor,
+    String(connection.id),
+  );
+});
+
 test("revoked while it runs: nothing is stored", async (t) => {
   const state = {};
   const run = fakeRunner(async (request) => {
@@ -480,6 +792,39 @@ test("pending batches are bounded per actor; expired and old ones are purged", a
   );
   await prepare(b, hash, accountId, { category_id: category });
   assert.equal(count(), 1);
+});
+
+test("pending batches are bounded in bytes across actors", async (t) => {
+  const { b, accountId, category } = fixture(t);
+  const hash = await installed(b);
+  const first = await prepare(b, hash, accountId, { category_id: category });
+  const size = b.db
+    .prepare("SELECT octet_length(batch) n FROM connector_batches WHERE id=?")
+    .get(first.id).n;
+  assert.ok(size > 0);
+  // Another actor's pending batch takes all the room but one more batch.
+  b.db
+    .prepare(
+      "INSERT INTO connector_batches(id,actor,component_hash,input_hash,config,account_id,batch,batch_hash,created_at,expires_at) VALUES ('relleno','otro',?,?,'',?,zeroblob(?),?,?,?)",
+    )
+    .run(
+      hash,
+      hash,
+      accountId,
+      CONNECTOR_LIMITS.pendingBytes - 2 * size,
+      "0".repeat(64),
+      "2026-11-04T12:00:00.000Z",
+      first.expires_at,
+    );
+  // Exactly at the limit is still within it.
+  await prepare(b, hash, accountId, { category_id: category });
+  await assert.rejects(
+    prepare(b, hash, accountId, { category_id: category }),
+    coded("CONNECTOR_BATCH_LIMIT"),
+  );
+  // A confirmed batch keeps no bytes.
+  b.confirmConnectorImport({ id: first.id, batch_sha256: first.batch_sha256 });
+  await prepare(b, hash, accountId, { category_id: category });
 });
 
 test("agents prepare only with allow; confirmations go through proposals; batches stay with their actor", async (t) => {
