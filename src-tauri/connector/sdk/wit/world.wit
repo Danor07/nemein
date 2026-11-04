@@ -1,0 +1,70 @@
+package nemein:connector@1.0.0;
+
+/// A Nemein connector is a pure function: it receives the bytes of a file the
+/// owner chose and returns an import batch v1 (`src/import-contract.js`).
+///
+/// The world has no imports. The component cannot read files, the clock, the
+/// network, randomness or the budget; it only sees `input` and `ctx`. Handing it
+/// the financial file is the capability the owner approves when enabling it.
+///
+/// Limits in `docs/conectores.md` are enforced by the host, outside the component.
+///
+/// The types and functions live in the exported interface `api`, not at the
+/// top of the world: the component model treats types declared in a world as
+/// type imports, and a connector component must have no imports at all.
+world connector {
+  export api;
+}
+
+/// The two functions every connector exports.
+interface api {
+  /// What the connector declares about itself. Declarative only: the host
+  /// identifies a connector by the SHA-256 of the component bytes together with
+  /// this manifest, never by these fields alone.
+  record manifest {
+    /// Stable identifier, lower-case ASCII words joined by `.` or `-`, at most
+    /// 160 characters. Each batch must declare it as `provenance.connector`.
+    id: string,
+    /// Connector version, 1 to 80 characters with content. Each batch must
+    /// declare it as `provenance.version`.
+    version: string,
+    /// Name shown to the owner, 1 to 80 characters with content.
+    name: string,
+    /// What file the connector reads, at most 500 characters.
+    description: string,
+    /// Accepted file name extensions, lower-case ASCII letters and digits
+    /// without the dot, 1 to 16 characters each, at most 8. Advisory only.
+    extensions: list<string>,
+  }
+
+  /// Decided by the host for each run, never by the file.
+  record context {
+    /// Configuration the owner saved for this connector, at most 16384 bytes.
+    /// Its format belongs to the connector, which must reject what it does not
+    /// understand. Empty when the owner saved none.
+    config: string,
+    /// Local destination account: the canonical decimal representation of a
+    /// positive safe integer (1 to 9007199254740991, no sign, no leading
+    /// zeros). The batch must declare exactly this `account_id`.
+    account-id: string,
+  }
+
+  /// A rejected file. No partial batch exists.
+  record error {
+    /// Stable code, `[A-Z][A-Z0-9_]*`, at most 64 characters.
+    code: string,
+    /// Explanation for the owner, 1 to 1024 characters. It must not repeat
+    /// the file's contents beyond what is needed to locate the problem.
+    message: string,
+  }
+
+  /// Returns the manifest. It runs connector code, so the host runs it inside
+  /// the same enclosure and time limit as `parse`.
+  describe: func() -> manifest;
+
+  /// Returns the JSON text of an import batch v1, compact UTF-8, or an error.
+  /// The host validates it with `validateImportBatch`, then rejects a batch
+  /// whose `account_id` differs from `ctx.account-id` or whose provenance
+  /// differs from the manifest. It never writes to the budget by itself.
+  parse: func(input: list<u8>, ctx: context) -> result<string, error>;
+}

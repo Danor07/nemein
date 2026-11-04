@@ -1,0 +1,18 @@
+[package]
+name = "nemein-connector-sdk"
+version = "1.0.0"
+description = "Guest SDK for nemein:connector@1.0.0 components"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+include = ["src/**", "wit/**", "Cargo.toml"]
+
+[dependencies]
+# No default features: async support would add the component-model async ABI.
+wit-bindgen = { version = "=0.63.0", default-features = false, features = ["macros", "realloc", "std"] }
+sha2 = { version = "=0.10.9", default-features = false }
+
+[dev-dependencies]
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
+serde_json = "=1.0.154"

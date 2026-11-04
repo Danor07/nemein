@@ -1,0 +1,24 @@
+[package]
+name = "nemein-connector-tools"
+version = "1.0.0"
+description = "Builds and checks nemein:connector@1.0.0 components"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "nemein-componentize"
+path = "src/main.rs"
+
+[dependencies]
+wit-component = { version = "=0.263.0", default-features = false }
+wasmparser = { version = "=0.263.0", default-features = false, features = ["std", "validate", "component-model", "features"] }
+sha2 = "=0.10.9"
+serde_json = "=1.0.154"
+
+[dev-dependencies]
+wat = "=1.263.0"
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
+# Only the features the worker will use: no WASI, no async, no cache.
+wasmtime = { version = "=50.0.1", default-features = false, features = ["runtime", "cranelift", "component-model", "std"] }

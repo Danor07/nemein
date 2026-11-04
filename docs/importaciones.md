@@ -73,7 +73,7 @@ No hay una lista de errores dentro de un lote v1 ni importaciones parciales. Los
 
 P15 publica el formato y el productor CSV interno; P8 incorpora OFX y CAMT.053 como productores puros. No agrega una acción pública que acepte lotes JSON arbitrarios ni concede capacidades nuevas. El validador y los parsers no acceden a SQLite, red ni permisos. El presupuesto funciona sin conectores.
 
-No se persisten lotes, procedencia ni cobertura y no se requieren migraciones SQL: las identidades usan `transactions.import_key` existente. No se puede demostrar cobertura completa de extractos con este formato en memoria. Persistencia/reanudación, comprobantes/adjuntos, conciliación con movimientos manuales, otras monedas, transferencias automáticas, WASM y JMAP quedan fuera de esta entrega.
+No se persisten lotes, procedencia ni cobertura y no se requieren migraciones SQL: las identidades usan `transactions.import_key` existente. No se puede demostrar cobertura completa de extractos con este formato en memoria. Persistencia/reanudación, comprobantes/adjuntos, conciliación con movimientos manuales, otras monedas, transferencias automáticas, WASM y JMAP quedan fuera de esta entrega. El contrato de los conectores WASM que producen lotes v1 está en [conectores](conectores.md).
 
 ## Extractos estándar (P8, primera entrega)
 

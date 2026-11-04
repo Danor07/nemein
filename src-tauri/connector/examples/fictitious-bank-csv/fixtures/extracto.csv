@@ -1,0 +1,10 @@
+BANCO FICTICIO;EXTRACTO
+Cuenta;FIC-0001
+Desde;2026-10-01
+Hasta;2026-10-31
+Fecha;Referencia;Descripción;Débito;Crédito
+2026-10-01;R-0001;Sueldo ficticio;;5000000
+2026-10-02;R-0002;Mercado del barrio;85000;
+2026-10-09;R-0003;"Farmacia; turno noche";42000;
+2026-10-15;R-0004;"Librería ""El Ejemplo""";120000;
+2026-10-31;R-0005;Transferencia ficticia recibida;;250000
