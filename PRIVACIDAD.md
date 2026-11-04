@@ -24,6 +24,12 @@ Los eventos P4 conservan identificadores, hora y tipo de operación, sin copiar 
 
 La auditoría P1 registra actor, acción, argumentos y regla aplicada. Las propuestas P2 conservan argumentos originales/finales, propósito, decisiones y respuestas. Estos registros pueden contener datos financieros y forman parte de los respaldos. No hay purga automática por ahora.
 
+Para `connector-prepare`, la auditoría guarda el SHA-256 y el tamaño del archivo, no su contenido. El lote preparado sí contiene los movimientos del extracto hasta que se confirma o vence: confirmado, conserva sólo su resultado.
+
+## Conectores
+
+Los componentes y su inventario viven en `connectors/`, dentro de la carpeta de datos, fuera del SQLite y de los respaldos. Un conector corre encerrado en Windows, sin red ni acceso a archivos, y sólo recibe el archivo que eligió el propietario. Su firma, si tiene, informa quién firmó esos bytes; Nemein nunca necesita la clave privada del autor.
+
 Los archivos de propuestas preparados sin conexión no contienen token, pero pueden incluir información financiera. Su entrega es manual mediante CLI/MCP; no se sincronizan ni envían a servicios externos automáticamente.
 
 Restaurar un respaldo recupera también las reglas y revocaciones que existían en ese momento. Antes de reconectar clientes a una base restaurada, revisar o revocar esas conexiones.

@@ -7,7 +7,8 @@ import path from "node:path";
 import { openBudget } from "../src/core.js";
 import { sha256 } from "../src/connectors.js";
 import { signComponent } from "../src/connector-signature.js";
-import { createApp } from "../src/server.js";
+import { LIMITS } from "../src/connector-runner.js";
+import { connectorsRunOn, createApp } from "../src/server.js";
 import {
   base64,
   component,
@@ -65,7 +66,17 @@ async function screen(t, { runs = true, runConnector = fakeRunner() } = {}) {
     name: "Varios",
     group_id: b.createGroup({ name: "Ficticio" }),
   });
-  return { b, dir, base, page, json, form, account, category };
+  return {
+    b,
+    dir,
+    base,
+    page,
+    json,
+    form,
+    account,
+    category,
+    run: runConnector,
+  };
 }
 const notice = (response) =>
   new URL(response.headers.get("location"), "http://x").searchParams.get(
@@ -95,6 +106,26 @@ test("the default follows the platform: only Windows runs connectors", async (t)
     rmSync(dir, { recursive: true, force: true });
   });
   assert.equal(createApp(b).locals.connectorsRun, process.platform === "win32");
+  assert.equal(connectorsRunOn("win32"), true);
+  for (const platform of ["linux", "darwin", "freebsd", "", undefined])
+    assert.equal(connectorsRunOn(platform), false);
+});
+
+test("other screens do not read connectors; a plain visit shows no error", async (t) => {
+  const s = await screen(t);
+  const reads = () =>
+    s.b.db
+      .prepare("SELECT COUNT(*) n FROM agent_audit WHERE action='connectors'")
+      .get().n;
+  // Setting up already opened the connectors screen once.
+  const before = reads();
+  for (const view of ["budget", "import", "access"])
+    await (await fetch(s.base + "/?view=" + view)).text();
+  assert.equal(reads(), before, "only the connectors screen lists them");
+  const html = await s.page();
+  assert.equal(reads(), before + 1);
+  assert.doesNotMatch(html, /role="alert"/);
+  assert.doesNotMatch(html, /connector-review/);
 });
 
 test("install, signature, enable with acknowledgement, prepare, review and confirm", async (t) => {
@@ -132,9 +163,9 @@ test("install, signature, enable with acknowledgement, prepare, review and confi
   assert.equal(notice(r), "Conector habilitado.");
   assert.equal(s.b.listConnectors()[0].enabled, true);
 
-  // Signed: valid, and it enables without the acknowledgement. Its body is
-  // larger than any other form takes.
-  const big = Buffer.alloc(9 * 1024 * 1024, 7);
+  // Signed: valid, and it enables without the acknowledgement. A component at
+  // its limit is a body larger than any other form takes.
+  const big = Buffer.alloc(LIMITS.component, 7);
   r = await s.json("connector-install", {
     component_base64: base64(big),
     signature: signed(big),
@@ -157,15 +188,23 @@ test("install, signature, enable with acknowledgement, prepare, review and confi
   assert.equal(r.status, 400);
   assert.equal((await r.json()).error, "request entity too large");
 
+  // Past the install route's own limit, the body is refused before it is read.
+  r = await s.json("connector-install", {
+    component_base64: "A".repeat(Math.ceil(LIMITS.component / 3) * 4 + 65536),
+  });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, "request entity too large");
+
   // Prepare: the server stores the batch and answers its id only.
   r = await s.json("connector-prepare", {
     hash: unsigned,
     account_id: String(s.account),
     category_id: String(s.category),
-    config: "",
+    config: "perfil=ficticio",
     content_base64: base64(statement),
   });
   assert.equal(r.status, 200);
+  assert.equal(s.run.calls.at(-1).config, "perfil=ficticio");
   const { id, ...rest } = await r.json();
   assert.deepEqual(rest, {});
   assert.equal(s.b.accountTransactions(s.account).length, 0);

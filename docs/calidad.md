@@ -130,3 +130,25 @@ Para llegar ahí no se bajó el umbral ni se excluyeron operadores:
   - La reescritura condicional del componente: instalar siempre lo reescribe.
   - El `JSON.parse` duplicado: ahora es una sola función, en la que lo dañado da un objeto vacío.
 
+## Conectores WASM P3.4
+
+Dos alcances nuevos de Stryker, en la matriz de mutación de CI, con el mismo mínimo del 90 % y el mismo verificador. Corren primero las propiedades y el fuzzing, y después la regresión.
+
+- **`connector-signature`:** `src/connector-signature.js` y `scripts/connector-sign.js`. Resultado: **100 %** (192 de 192), sin timeouts, errores ni mutantes sin cobertura.
+- **`connector-screen`:** el script de la página (`public/connectors.js`) y las rutas, el tope de la instalación, el aviso de plataforma y la lectura de la pantalla en `src/server.js`. Resultado: SCREEN.
+
+El alcance `connectors` suma la revisión del lote, la firma en el inventario y la confirmación sin firma válida, y en `src/access.js` el resumen del archivo en la auditoría. Resultado: CONNECTORS.
+
+Mediciones rechazadas y lo que se corrigió:
+- **La pantalla dio 36,30 %.** `public/connectors.js` corre en un `vm` nuevo, que no veía qué mutante estaba activo: todos se comportaban como el original. La prueba ahora le pasa `__STRYKER_ACTIVE_MUTANT__`, como la de `mcp-download.js`.
+- **Después dio 98,64 % con un timeout.** El base64 por partes tenía un bucle `for`; mutado a `offset -= 8192`, no terminaba nunca. Ahora codifica el navegador (`FileReader.readAsDataURL`), sin bucle. Además, cada envío de la prueba tiene un plazo de 2 s, así que una promesa que nunca se resuelve falla en lugar de llegar al plazo de Stryker.
+- **La firma dio 96,50 %.** Se quitó código que no se podía alcanzar o que no cambiaba nada:
+  - un `try/catch` alrededor de la verificación: con las longitudes ya fijadas, Ed25519 responde `false` y no lanza;
+  - un `typeof` redundante con `Object.keys`;
+  - un `"utf8"` que es el valor por defecto.
+  
+  Las aserciones exactas de la salida del script cubrieron el resto.
+- **Plataforma:** en Linux, `process.platform === "win32"` y `false` dan lo mismo, así que esa comparación no se podía medir. Ahora es una función, `connectorsRunOn(platform)`, probada con cada sistema.
+
+Rangos reubicados, sin cambiar lo que miden: `server.js` en los alcances `api` y `workflow`, y `access.js` en `api`, `workflow` y `connectors`.
+

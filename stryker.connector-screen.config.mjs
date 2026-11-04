@@ -10,10 +10,11 @@ export default {
   timeoutMS: 20000,
   mutate: [
     "public/connectors.js",
-    "src/server.js:44-47",
-    "src/server.js:130-149",
-    "src/server.js:182-182",
-    "src/server.js:401-441",
+    "src/server.js:12-12",
+    "src/server.js:46-49",
+    "src/server.js:132-150",
+    "src/server.js:183-183",
+    "src/server.js:402-442",
   ],
   commandRunner: {
     command:

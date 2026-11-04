@@ -8,6 +8,8 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { openBudget, today } from "./core.js";
 import { LIMITS } from "./connector-runner.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Connectors run only inside the Windows enclosure (docs/conectores.md).
+export const connectorsRunOn = (platform) => platform === "win32";
 export function createApp(budget, { installationRoots, localApi = process.env.BUDGET_LOCAL_API === "1" } = {}) {
   const app = express(),
     csrf = randomBytes(32).toString("hex"),
@@ -127,8 +129,7 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
     });
   app.locals.today = today;
   app.locals.csrf = csrf;
-  // Connectors run only inside the Windows enclosure (docs/conectores.md).
-  app.locals.connectorsRun = process.platform === "win32";
+  app.locals.connectorsRun = connectorsRunOn(process.platform);
   // The owner's connectors screen. A damaged inventory or a batch that is not
   // the owner's shows its reason instead of failing the page.
   const connectorScreen = (req) => {

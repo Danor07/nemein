@@ -8,10 +8,7 @@ import { createHash, createPublicKey, sign, verify } from "node:crypto";
 // SHA-256, like the namespace of SSH signatures (PROTOCOL.sshsig): a Nemein
 // signature never verifies as a signature over anything else, and no other
 // product's signature over the same hash verifies here.
-export const SIGNATURE_DOMAIN = Buffer.from(
-  "nemein:connector-signature:v1\n",
-  "utf8",
-);
+export const SIGNATURE_DOMAIN = Buffer.from("nemein:connector-signature:v1\n");
 export const SIGNATURE_FORMAT = "nemein-connector-signature";
 // The signature file is small: anything longer is not one.
 export const SIGNATURE_MAX = 4096;
@@ -53,9 +50,9 @@ export function parseSignature(value) {
     "signature",
     "version",
   ];
+  // Object.keys of a number or a boolean is empty: only null needs a guard.
   if (
     !file ||
-    typeof file !== "object" ||
     Array.isArray(file) ||
     Object.keys(file).sort().join() !== keys.join() ||
     file.format !== SIGNATURE_FORMAT ||
@@ -91,20 +88,17 @@ export function checkSignature(componentHash, stored) {
   const key = sha256(raw);
   if (file.component_sha256 !== componentHash)
     return { status: "invalid", reason: "component", key };
-  let ok = false;
-  try {
-    ok = verify(
-      null,
-      signedMessage(componentHash),
-      createPublicKey({
-        key: { kty: "OKP", crv: "Ed25519", x: raw.toString("base64url") },
-        format: "jwk",
-      }),
-      Buffer.from(file.signature, "base64"),
-    );
-  } catch {
-    // A public key that is not a curve point: the signature cannot hold.
-  }
+  // The parse fixed both lengths; verification then answers false, also for
+  // a public key that is not a point of the curve.
+  const ok = verify(
+    null,
+    signedMessage(componentHash),
+    createPublicKey({
+      key: { kty: "OKP", crv: "Ed25519", x: raw.toString("base64url") },
+      format: "jwk",
+    }),
+    Buffer.from(file.signature, "base64"),
+  );
   return ok
     ? { status: "valid", key }
     : { status: "invalid", reason: "signature", key };

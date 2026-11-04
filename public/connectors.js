@@ -5,12 +5,16 @@ const COMPONENT_MAX = 16 * 1024 * 1024;
 const SIGNATURE_MAX = 4096;
 const INPUT_MAX = 5000000;
 
-function toBase64(bytes) {
-  const chunks = [];
-  for (let offset = 0; offset < bytes.length; offset += 8192)
-    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 8192)));
-  return btoa(chunks.join(""));
-}
+// The browser encodes the file itself: a data URL carries its bytes as
+// base64 after the comma. Chromium answers an empty file with "data:".
+const toBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1] ?? "");
+    reader.onerror = () =>
+      reject(new Error("No se pudo leer el archivo. Volvé a seleccionarlo."));
+    reader.readAsDataURL(file);
+  });
 
 async function post(action, body) {
   const response = await fetch("/action/" + action, {
@@ -30,8 +34,7 @@ function handle(form, status, work) {
     const button = form.querySelector("button");
     button.disabled = true;
     try {
-      const message = await work();
-      if (message) status.textContent = message;
+      status.textContent = await work();
     } catch (e) {
       status.textContent = e.message;
     } finally {
@@ -54,12 +57,11 @@ if (install)
         return "El archivo de firma supera 4 KiB: no es una firma de Nemein.";
       const { notice } = await post("connector-install", {
         _csrf: install.dataset.csrf,
-        component_base64: toBase64(
-          new Uint8Array(await component.arrayBuffer()),
-        ),
+        component_base64: await toBase64(component),
         ...(signature ? { signature: await signature.text() } : {}),
       });
       location.assign("/?view=connectors&notice=" + encodeURIComponent(notice));
+      return notice;
     },
   );
 
@@ -79,12 +81,13 @@ if (prepare)
         account_id: field("account_id"),
         category_id: field("category_id"),
         config: field("config"),
-        content_base64: toBase64(new Uint8Array(await input.arrayBuffer())),
+        content_base64: await toBase64(input),
       });
       location.assign(
         "/?view=connectors&batch=" +
           encodeURIComponent(id) +
           "#connector-review",
       );
+      return "Lote preparado. Abriendo la revisión…";
     },
   );

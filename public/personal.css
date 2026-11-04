@@ -138,3 +138,5 @@ dialog::backdrop { background:rgb(10 30 20 / .45); }
 .review-more>summary { min-height:44px; padding:12px 0; box-sizing:border-box; }
 .review-more+.review-more { margin-top:8px; }
 .category-editor form { flex-wrap:wrap; } .category-editor button { white-space:nowrap; }
+/* A checkbox beside its sentence, not above it (connectors screen). */
+.check-label { flex-direction:row; align-items:center; gap:10px; margin-bottom:12px; }

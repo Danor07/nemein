@@ -9,11 +9,26 @@ const source = readFileSync(
   new URL("../public/connectors.js", import.meta.url),
   "utf8",
 );
-const file = (bytes, size = bytes.length) => ({
+const file = (bytes, size = bytes.length, unreadable = false) => ({
+  bytes,
   size,
-  arrayBuffer: async () => Uint8Array.from(bytes).buffer,
+  unreadable,
   text: async () => Buffer.from(bytes).toString("utf8"),
 });
+// Like the browser's: it answers later, with a data URL or an error.
+class FileReader {
+  readAsDataURL(f) {
+    setImmediate(() => {
+      if (f.unreadable) return this.onerror();
+      // Chromium, as in WebView2, answers an empty file with "data:".
+      this.result = f.bytes.length
+        ? "data:application/octet-stream;base64," +
+          Buffer.from(f.bytes).toString("base64")
+        : "data:";
+      this.onload();
+    });
+  }
+}
 
 function harness({
   answer = { ok: true, body: {} },
@@ -60,14 +75,25 @@ function harness({
       return { ok: answer.ok, json: async () => answer.body };
     },
     location: { assign: (url) => visits.push(url) },
-    btoa,
+    FileReader,
     encodeURIComponent,
+    // Stryker's instrumented copy reads the active mutant from here.
+    process: {
+      env: { __STRYKER_ACTIVE_MUTANT__: process.env.__STRYKER_ACTIVE_MUTANT__ },
+    },
   });
+  // A submission that never settles fails here, quickly, instead of hanging.
   const submit = async (name) => {
     let prevented = false;
-    await nodes[`#connector-${name}-form`].listeners.submit({
-      preventDefault: () => (prevented = true),
-    });
+    let timer;
+    await Promise.race([
+      nodes[`#connector-${name}-form`].listeners.submit({
+        preventDefault: () => (prevented = true),
+      }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("never settled")), 2000);
+      }),
+    ]).finally(() => clearTimeout(timer));
     assert.equal(prevented, true, "the page never posts the form itself");
     assert.equal(button.disabled, false, "the button is usable again");
   };
@@ -77,7 +103,6 @@ function harness({
 test("install sends the component as base64 with its signature, then shows the notice", async () => {
   const notice = "Conector instalado y deshabilitado.";
   const h = harness({ answer: { ok: true, body: { notice } } });
-  // Bigger than one chunk, to cover the chunked encoding.
   const bytes = Array.from({ length: 20000 }, (_, i) => (i * 7) % 256);
   h.nodes["#connector-component"].files = [file(bytes)];
   h.nodes["#connector-signature"].files = [file([...Buffer.from('{"x":1}')])];
@@ -103,6 +128,27 @@ test("install sends the component as base64 with its signature, then shows the n
   assert.deepEqual(h.visits, [
     "/?view=connectors&notice=" + encodeURIComponent(notice),
   ]);
+  assert.equal(h.nodes["#connector-install-status"].textContent, notice);
+});
+
+test("a file the browser cannot read is reported and nothing is sent", async () => {
+  const h = harness({
+    answer: { ok: true, body: { notice: "Listo", id: "x" } },
+  });
+  h.nodes["#connector-component"].files = [file([1], 1, true)];
+  await h.submit("install");
+  h.nodes["#connector-input"].files = [file([1], 1, true)];
+  await h.submit("prepare");
+  for (const status of [
+    "#connector-install-status",
+    "#connector-prepare-status",
+  ])
+    assert.equal(
+      h.nodes[status].textContent,
+      "No se pudo leer el archivo. Volvé a seleccionarlo.",
+    );
+  assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.visits, []);
 });
 
 test("install without a signature sends none; limits stop it before any upload", async () => {
@@ -111,6 +157,11 @@ test("install without a signature sends none; limits stop it before any upload",
   await h.submit("install");
   assert.deepEqual(Object.keys(h.calls[0].body), ["_csrf", "component_base64"]);
   assert.equal(h.calls[0].body.component_base64, "AQID");
+  // An empty file is empty bytes, for the server to refuse with its reason.
+  h.nodes["#connector-component"].files = [file([])];
+  await h.submit("install");
+  assert.equal(h.calls[1].body.component_base64, "");
+  h.calls.length = 1;
 
   const status = h.nodes["#connector-install-status"];
   for (const [component, signature, message] of [
@@ -175,6 +226,10 @@ test("prepare sends the chosen fields and the file, then opens the review", asyn
       encodeURIComponent("lote 1/ä") +
       "#connector-review",
   ]);
+  assert.equal(
+    h.nodes["#connector-prepare-status"].textContent,
+    "Lote preparado. Abriendo la revisión…",
+  );
   const status = h.nodes["#connector-prepare-status"];
   for (const [input, message] of [
     [undefined, "Elegí el archivo del banco."],

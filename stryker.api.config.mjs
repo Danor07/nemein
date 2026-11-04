@@ -10,9 +10,9 @@ export default {
     "src/access.js:178-178",
     "src/access.js:210-217",
     "src/access.js:721-736",
-    "src/server.js:18-20",
-    "src/server.js:484-485",
-    "src/server.js:11-11",
+    "src/server.js:20-22",
+    "src/server.js:485-486",
+    "src/server.js:13-13",
   ],
   commandRunner: {
     command:

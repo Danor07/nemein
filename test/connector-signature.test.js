@@ -155,6 +155,10 @@ test("the signature file is exactly Nemein's format", () => {
   assert.throws(() => parseSignature("{"), {
     message: "El archivo de firma no es JSON.",
   });
+  for (const bad of [null, 7, true, '"texto"', { ...file, version: 2 }])
+    assert.throws(() => parseSignature(bad), {
+      message: "El archivo de firma no tiene el formato de Nemein.",
+    });
   assert.throws(() => parseSignature({ ...file, public_key: "x" }), {
     message: "La firma tiene una clave pública inválida.",
   });
@@ -212,7 +216,13 @@ test("the author's tool creates a key and signs, and never overwrites a file", (
   assert.throws(() => connectorSign(["sign", component, key, out]), {
     code: "EEXIST",
   });
-  for (const args of [[], ["keygen"], ["sign", component, key], ["otro", key]])
+  for (const args of [
+    [],
+    ["keygen"],
+    ["sign", component, key],
+    ["otro", key],
+    ["firmar", component, key, path.join(dir, "otra.json")],
+  ])
     assert.throws(() => connectorSign(args), { code: "USAGE" });
 
   // As a command: exit codes and output streams.
@@ -223,11 +233,11 @@ test("the author's tool creates a key and signs, and never overwrites a file", (
     spawnSync(process.execPath, [script, ...args], { encoding: "utf8" });
   let r = run("keygen", path.join(dir, "otra.pem"));
   assert.equal(r.status, 0);
-  assert.match(r.stdout, /^Clave creada\./);
+  assert.match(r.stdout, /^Clave creada\. .*\n$/);
   r = run();
   assert.equal(r.status, 2);
-  assert.match(r.stderr, /^Uso: connector-sign\.js/);
+  assert.match(r.stderr, /^Uso: connector-sign\.js.*\n$/);
   r = run("keygen", key);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /EEXIST/);
+  assert.match(r.stderr, /EEXIST.*\n$/);
 });
