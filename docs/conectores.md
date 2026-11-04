@@ -2,7 +2,7 @@
 
 Un conector es una función pura: recibe los bytes de un archivo que eligió el propietario y devuelve un [lote de importación v1](importaciones.md). Corre aparte, sin acceso al presupuesto, y su salida nunca escribe por sí misma: el anfitrión la valida y la pasa por la revisión y la confirmación protegida.
 
-**Estado.** Esta primera entrega (P3.1) fija el contrato y demuestra la receta. Nemein todavía **no ejecuta conectores**: el trabajador encerrado y el empaquetado llegan en P3.2; la preparación, revisión y confirmación del lote, junto con la instalación, habilitación, revocación y recuperación, en P3.3; la pantalla y la firma que informa, en P3.4. En Linux los conectores no van a correr hasta tener un encierro equivalente al de Windows.
+**Estado.** P3.1 fijó el contrato y la receta. P3.2 agrega el trabajador encerrado `nemein-connector`, su empaquetado y el ejecutor de Node que lo usa (`src/connector-runner.js`); todavía no hay flujo en la aplicación que lo llame. La preparación, revisión y confirmación del lote, junto con la instalación, habilitación, revocación y recuperación, llegan en P3.3; la pantalla y la firma que informa, en P3.4. En Linux los conectores no corren hasta tener un encierro equivalente al de Windows: el binario y el ejecutor responden `UNSUPPORTED_PLATFORM`.
 
 ## Mundo WIT
 
@@ -61,10 +61,14 @@ El manifiesto es declarativo. La identidad verificada de un conector es el SHA-2
 | `config` | 16.384 bytes |
 | `error.code` | `[A-Z][A-Z0-9_]*`, hasta 64 caracteres |
 | `error.message` | 1 a 1.024 caracteres; no debe repetir el archivo más allá de lo necesario para ubicar el problema |
-| Memoria y tiempo | 256 MB y 10 s de reloj de pared por archivo, desde la compilación hasta la respuesta (presupuesto heredado de Resto-tech, a medir en P3.2) |
-| Componente | A fijar en P3.2 junto con la prueba de compilación patológica. El ejemplo pesa unos 75 KB |
+| Componente | 16.777.216 bytes (16 MiB). El ejemplo pesa unos 75 KB |
+| Manifiesto | Sus campos suman hasta 8.192 bytes, con hasta 8 extensiones; además, las reglas de cada campo de arriba |
+| Tiempo | 10 s de reloj de pared por ejecución, desde que se crea el proceso: compilación, instanciación, `describe`, `parse` e IPC |
+| Memoria del proceso | 256 MiB comprometidos para todo el trabajador (límite del Job) |
+| Memoria del componente | 128 MiB de memoria lineal, 100.000 elementos de tabla, 32 instancias, 32 tablas y 4 memorias; pila de wasm de 512 KiB |
+| Bytes que el anfitrión levanta por llamada | 26.214.400 (el tope de salida más 1 MiB); un resultado más grande falla dentro del componente |
 
-Estos límites forman parte del contrato para quien escribe conectores. Los aplica el trabajador desde P3.2, fuera del componente.
+Estos límites forman parte del contrato para quien escribe conectores. Desde P3.2 los aplican el trabajador y el ejecutor de Node, fuera del componente.
 
 ## Identidad de los movimientos
 
@@ -97,6 +101,76 @@ cargo run --locked -p nemein-connector-tools -- check salida.wasm
 
 La comprobación estática lee nombres sin compilar ni ejecutar. Los tipos de las funciones los comprueba wasmtime al instanciar con enlaces tipados: un componente con el nombre correcto y tipos falsos pasa `check` pero no se instancia.
 
+## Trabajador encerrado (P3.2)
+
+`nemein-connector` es un solo binario Rust (`src-tauri/connector/worker`) con dos papeles:
+
+- **Supervisor** (sin argumentos). Node le escribe una trama de solicitud por stdin y **deja stdin abierto** hasta recibir la respuesta. El supervisor crea al trabajador encerrado, le pasa la solicitud, espera una trama de respuesta dentro del plazo y la reenvía por stdout. Mata al trabajador en todos los casos. Cerrar stdin antes de la respuesta cancela la ejecución: el supervisor mata al trabajador y termina sin escribir nada (código 1).
+- **Trabajador** (`worker`). Antes de leer nada comprueba que está dentro de un AppContainer y de un Job; si no, responde `SANDBOX_UNAVAILABLE`. Después compila el componente con wasmtime y llama a `describe` y, si corresponde, a `parse`.
+
+El supervisor no interpreta lo que dice el trabajador más allá de los largos de trama. El ejecutor de Node trata toda respuesta como no confiable y vuelve a comprobar, fuera del encierro, el manifiesto, el manifiesto aprobado, el lote v1 (`validateImportBatch`), la cuenta y la procedencia.
+
+### Tramas
+
+Las tramas van por stdin y stdout:
+
+```text
+"NMC" versión:u8=1 tipo:u8 ('Q' solicitud, 'R' respuesta) largo:u32le encabezado(JSON) cantidad:u8 (largo:u32le bloque)*
+```
+
+- **Solicitud:** encabezado `{"op":"describe"|"parse","config":"…","account_id":"…"}`; bloques: el componente y el archivo (vacío para `describe`).
+- **Respuesta:** encabezado `{"status":"ok","manifest":{…}}` con el lote como único bloque en `parse`; `{"status":"connector_error","manifest":{…},"error":{"code","message"}}`; o `{"status":"host_error","code":"…","message":"…"}`.
+
+Cada largo se compara con su tope antes de leer un solo byte de ese campo: encabezado de 64 KiB, componente, archivo y lote. Los campos se leen a medida que llegan, así que quien declara un largo enorme o deja de escribir no hace reservar más que el tope. Del lado de Node, el lector incremental además rechaza bytes después de la trama. [frames.json](../src-tauri/connector/worker/fixtures/frames.json) tiene vectores que prueban las dos implementaciones: Node codifica solicitudes que Rust decodifica, y al revés con las respuestas.
+
+### Encierro (Windows 10 1809 o posterior)
+
+| Pieza | Qué hace |
+| --- | --- |
+| Token | AppContainer menos privilegiado (LPAC) con SID derivado de `Nemein.ConnectorWorker`, sin perfil registrado, por lo que no tiene ninguna carpeta escribible, y sin capacidades. Sólo alcanza objetos que nombran su SID o `ALL RESTRICTED APPLICATION PACKAGES`, como System32. |
+| Permisos de archivos | El supervisor otorga lectura y ejecución a ese SID sólo sobre `nemein-connector.exe` y su carpeta, sin herencia, y nunca sobre la carpeta de datos. Si el permiso ya está, no toca nada. Nemein se instala en `%LOCALAPPDATA%\Nemein`, y el usuario es dueño de esa carpeta, así que no hace falta elevación. |
+| Job | `KILL_ON_JOB_CLOSE`, un solo proceso activo, 256 MiB comprometidos y muerte ante excepciones no manejadas. El supervisor tiene el único handle: si muere por cualquier motivo, muere el trabajador. Las restricciones de UI se agregan cuando el trabajador no está en otro Job, porque los Jobs con restricciones de UI no se pueden anidar; dentro de la aplicación de escritorio ya está en el Job de Nemein, y ahí la UI la cubre el bloqueo de Win32k. |
+| Proceso | Se crea suspendido, se asigna al Job y recién entonces corre. Sin procesos hijos (`CHILD_PROCESS_RESTRICTED`), sin consola (`DETACHED_PROCESS`), con un entorno que sólo tiene `SystemRoot`, y la carpeta del binario como directorio de trabajo. |
+| Handles | Hereda exactamente dos caños anónimos, los de stdin y stdout, mediante `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`. |
+| Mitigaciones | El conjunto de Chromium compatible con un JIT: terminación ante corrupción del heap, ASLR ascendente y de alta entropía, Win32k deshabilitado, sin puntos de extensión, sin fuentes no del sistema, sin imágenes remotas ni de baja integridad, y System32 primero. No se prohíbe el código dinámico, porque Cranelift escribe código máquina. |
+| Runtime de C | Enlazado estático (`+crt-static`), porque dentro del AppContainer `vcruntime140.dll` puede no estar disponible. |
+
+**Wasmtime** compila sin WASI, `async`, hilos, GC ni caché; además se apagan memory64, multi-memory, relaxed SIMD, aritmética ancha, páginas a medida, cambio de pila y llamadas de cola. Antes de compilar, `wasmparser` cuenta los imports de nivel superior de cualquier clase: `component_type().imports()` de wasmtime no lista los imports de tipo, y el contrato no admite ninguno. Instancia con un `Linker` vacío y enlaces tipados del mundo, usa un `Store` nuevo por ejecución con los límites de arriba, y corre wasm en un hilo con pila explícita de 8 MiB.
+
+### Cierre en cadena
+
+- **Fin de stdin o caída de Node:** el supervisor ve EOF, mata al trabajador y termina.
+- **Caída o muerte del supervisor:** se cierra el único handle del Job y `KILL_ON_JOB_CLOSE` mata al trabajador.
+- **Cierre o caída de la ventana:** Tauri pone a Node en un Job propio con `KILL_ON_JOB_CLOSE` que no admite escapar. Al terminar Nemein por cualquier motivo, mueren Node y todo lo que haya iniciado. Node no lanza procesos antes de que cargue la ventana, así que asignarlo justo después de crearlo no deja nada afuera.
+
+### Errores
+
+El ejecutor de Node responde con un `Error` con `code`:
+
+- **`CONNECTOR_<código>` para los fallos del anfitrión:**
+  - `REQUEST_INVALID`, `COMPONENT_INVALID`, `COMPONENT_HAS_IMPORTS`, `COMPONENT_WRONG_WORLD`, `CONNECTOR_TRAP`;
+  - `MANIFEST_TOO_LARGE`, `ERROR_TOO_LARGE`, `OUTPUT_TOO_LARGE`;
+  - `TIMEOUT`, `MEMORY_LIMIT`, `WORKER_CRASHED`, `WORKER_PROTOCOL`, `SANDBOX_UNAVAILABLE`, `UNSUPPORTED_PLATFORM`.
+- **Además:**
+  - `CONNECTOR_UNAVAILABLE`: no hay binario configurado o no se encontró;
+  - `CONNECTOR_REQUEST_INVALID`: la solicitud no pasa los topes ni el `account-id` canónico, y no se lanza nada;
+  - `CONNECTOR_SUPERVISOR_FAILED`: el supervisor no pudo iniciarse aunque el binario existe, dejó de leer antes de recibir la solicitud completa o terminó sin responder;
+  - `CONNECTOR_PROTOCOL`: el supervisor respondió algo que no es una trama válida, o bytes de más;
+  - `CONNECTOR_MANIFEST_INVALID` y `CONNECTOR_MANIFEST_MISMATCH`: el manifiesto no cumple las reglas o no es el aprobado;
+  - `CONNECTOR_ACCOUNT_MISMATCH` y `CONNECTOR_PROVENANCE_MISMATCH`: el lote declara otra cuenta, u otra procedencia que el manifiesto;
+  - los códigos `IMPORT_*` del contrato v1.
+- **Errores del propio conector:** salen como `CONNECTOR_REJECTED`, con su código en `connectorCode` y su mensaje. Así un conector no puede hacer pasar su código por un fallo del anfitrión.
+
+El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor más 5): si el supervisor quedara trabado, lo mata y responde `CONNECTOR_TIMEOUT`. Gana el primer desenlace. Con una respuesta válida cierra stdin; ante cualquier error, además, mata al supervisor, y con él cae el Job del trabajador.
+
+Node lanza al supervisor con un entorno que sólo tiene `SystemRoot`. En Windows, libuv agrega las variables que Windows necesita para crear procesos, como `PATH`, `TEMP` y `USERPROFILE`. El supervisor no las usa y el trabajador recibe un bloque propio que sólo tiene `SystemRoot`.
+
+### Empaquetado
+
+- `npm run desktop:prepare` ejecuta [prepare-connector.js](../scripts/prepare-connector.js), que compila sólo el binario de producción (`--release --locked --bin nemein-connector`, nunca la feature de prueba) y lo copia a `src-tauri/binaries/nemein-connector-<triple>`.
+- Tauri lo empaqueta como `externalBin`, junto a `nemein.exe`, y le pasa a Node su ruta en `NEMEIN_CONNECTOR_BIN`.
+- En Linux, el chequeo del shell usa un archivo de relleno: los conectores no corren ahí.
+
 ## Pruebas y calidad
 
 - Regresión: formato, límites exactos (20.000 movimientos, 160 caracteres, 10^12), fechas, comillas, codificación, contexto, configuración y archivos de oro.
@@ -106,12 +180,36 @@ La comprobación estática lee nombres sin compilar ni ejecutar. Los tipos de la
 - Node: [connector-contract.test.js](../test/connector-contract.test.js) valida el lote de oro con `validateImportBatch`, recalcula las identidades desde el CSV y comprueba que el mundo no declara imports. Corre sin Rust en los jobs Linux y Windows existentes.
 - Mutación: `cargo-mutants` 27.1.0 sobre el SDK, el ejemplo y la herramienta (`.cargo/mutants.toml`). Cada mutante se juzga sólo con las pruebas de su propio paquete. `scripts/mutation-gate.js --cargo-mutants` aplica el mismo mínimo del 90 % y rechaza Timeout, Failure y una línea base fallida. Los mutantes que no compilan (Unviable) no miden nada y quedan fuera, como en el propio cargo-mutants. El plazo mínimo por mutante es de 300 s, porque la primera prueba de cada copia compila el componente; un timeout rechaza la medición.
 
-Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pruebas) y, desde `src-tauri/connector`, `cargo mutants --workspace` seguido de `node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json`. En CI, los jobs `Connector component` y `Connector mutation` son requisitos del `Quality gate`.
+### Pruebas del trabajador encerrado
+
+- **Tramas y protocolo:** pruebas unitarias de cada largo en su tope y uno más, tramas truncadas, bytes de más y JSON con campos desconocidos. [frames.json](../src-tauri/connector/worker/fixtures/frames.json) tiene los vectores compartidos con Node.
+- **Ejecución:** el ejemplo devuelve el lote de oro dentro de wasmtime. El componente hostil prueba cada modo: trampa, bucle, crecimiento de memoria, lote enorme o inválido, mentiras de procedencia y de cuenta, errores enormes y reservas del anfitrión. También se prueban componentes con imports de tipo, otro mundo y memory64.
+- **Supervisor**, con el trabajador de prueba sin encierro, en cualquier sistema: cuelgue, trabajador que no lee, salida y truncado, respuesta enorme o basura, cancelación, encierro no disponible, y un plazo que cuenta el arranque. Además `describe` trabado y compilación patológica.
+- **Encierro real**, sólo en Windows (`tests/sandbox.rs` y `tests/enclosed_hostile.rs`):
+  - lote de oro encerrado;
+  - la sonda nativa, con control positivo: lectura, escritura, red, procesos y entorno. También informa desde adentro el token (AppContainer, LPAC, cero capacidades), los límites de su Job y cada política de mitigación, y se comparan con los valores documentados;
+  - límite de memoria informado como `MEMORY_LIMIT`;
+  - el trabajador se niega a correr fuera del encierro;
+  - matar al supervisor o cerrar stdin termina al trabajador;
+  - permisos sólo sobre el binario y su carpeta, sin herencia;
+  - solicitudes enormes o truncadas;
+  - los componentes hostiles encerrados.
+- **Cadena desde Node** (`test/connector-chain.test.js`, en el job de Windows): matar a Node termina al supervisor y al trabajador.
+- **Ejecutor de Node:**
+  - regresión con un supervisor falso. El falso deja su pid y la solicitud que recibió, y termina solo a los 8 s, así que un ejecutor roto falla una aserción en lugar de colgar la suite;
+  - propiedades: ida y vuelta de solicitudes con un decodificador independiente, cualquier partición de una respuesta, largos declarados y manifiestos;
+  - fuzzing de respuestas reales mutadas.
+- **Mutación:**
+  - cargo-mutants mide las partes portables del trabajador (`frame`, `protocol`, `execute`, `supervise`, `limits`) dentro de `Connector mutation`;
+  - `sandbox.rs` y `main.rs` se miden en Windows con [mutants-windows.toml](../src-tauri/connector/.cargo/mutants-windows.toml), en cuatro shards que el verificador juzga como una sola corrida. Las banderas se arman con una sola función de unión, para que reemplazar `|` por `^` no deje mutantes equivalentes, y pruebas de respuesta conocida fijan cada conjunto en su valor documentado;
+  - Stryker mide `src/connector-runner.js` en el alcance `connector-runner`.
+
+Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pruebas) y, desde `src-tauri/connector`, `cargo mutants --workspace` seguido de `node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json`. En CI, los jobs `Connector component`, `Connector mutation`, `Connector sandbox (Windows)` y `Connector enclosure mutation` son requisitos del `Quality gate`.
 
 ## Cinco factores
 
 - **Utilidad:** importar extractos de bancos sin formato estándar sin tocar el núcleo.
 - **Responsabilidad:** el conector traduce un archivo a un lote; el anfitrión valida, deduplica, pide permisos y confirma.
 - **Contrato:** WIT `nemein:connector@1.0.0`, lote v1 y los límites de arriba.
-- **Pruebas de frontera:** sin imports, tipado al instanciar, archivos hostiles, oro entre Rust y Node, y mutación.
-- **Desconexión:** el presupuesto no depende de esta carpeta. Sin conectores, CSV, OFX y CAMT siguen igual, y en esta entrega nada de la aplicación la usa.
+- **Pruebas de frontera:** sin imports, tipado al instanciar, archivos hostiles, oro entre Rust y Node, componentes hostiles dentro del encierro real, sonda nativa con control positivo, cierre en cadena y mutación.
+- **Desconexión:** el presupuesto no depende de esta carpeta. Sin conectores, CSV, OFX y CAMT siguen igual. En P3.2 nada de la aplicación llama al ejecutor; si falta el binario o el sistema no es Windows, el ejecutor falla cerrado con un código propio.

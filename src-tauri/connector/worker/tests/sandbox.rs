@@ -9,16 +9,19 @@ use common::{component, fixture, header, request};
 use nemein_connector::frame::{self, Frame, Kind};
 use nemein_connector::protocol::{code, Op};
 use nemein_connector::sandbox;
+use nemein_connector::supervise::{Ending, Worker};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::ptr::null_mut;
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows_sys::Win32::System::JobObjects::IsProcessInJob;
 use windows_sys::Win32::System::Threading::{
-    OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
+    GetCurrentProcess, OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
 };
 
 const SUPERVISOR: &str = env!("CARGO_BIN_EXE_nemein-connector");
@@ -155,8 +158,17 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     }
     let _ = std::fs::remove_file(writable.join("probe-wrote-here.txt"));
 
-    let mut enclosed =
-        sandbox::spawn(Path::new(PROBE), &args, 256 * 1024 * 1024).expect("enclosed probe");
+    // Positive control for the enclosure report: the probe can tell an
+    // AppContainer and the mitigations apart.
+    assert_eq!(control["token"]["appcontainer"], 0, "control: {control}");
+    assert_eq!(control["mitigations"]["win32k"], 0, "control: {control}");
+    assert_eq!(
+        control["mitigations"]["child_process"], 0,
+        "control: {control}"
+    );
+
+    let memory = 256 * 1024 * 1024;
+    let mut enclosed = sandbox::spawn(Path::new(PROBE), &args, memory).expect("enclosed probe");
     drop(enclosed.take_stdin());
     let mut out = String::new();
     enclosed.take_stdout().read_to_string(&mut out).unwrap();
@@ -171,71 +183,38 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
     }
     assert_eq!(report["environment"], 1, "only SystemRoot: {report}");
     assert!(!writable.join("probe-wrote-here.txt").exists());
+
+    // What the enclosure applied, read from inside and compared with the
+    // documented values, not with the functions that built them.
+    assert_eq!(
+        report["token"],
+        serde_json::json!({"appcontainer": 1, "lpac": 1, "capabilities": 0}),
+        "{report}"
+    );
+    let job = &report["job"];
+    // KILL_ON_JOB_CLOSE | ACTIVE_PROCESS | JOB_MEMORY | DIE_ON_UNHANDLED_EXCEPTION.
+    assert_eq!(job["limits"], 0x2608, "{report}");
+    assert_eq!(job["active_processes"], 1, "{report}");
+    assert_eq!(job["memory"], memory, "{report}");
+    // The eight UI classes, unless this test already runs inside a job.
+    assert_eq!(job["ui"], if in_a_job() { 0 } else { 0xff }, "{report}");
+    assert_eq!(enclosed.ui_restricted(), !in_a_job());
+    let policy = |name: &str| report["mitigations"][name].as_i64().unwrap();
+    // Bottom-up (bit 0) and high-entropy (bit 2) ASLR.
+    assert_eq!(policy("aslr") & 0b101, 0b101, "{report}");
+    for name in ["win32k", "extension_points", "fonts", "child_process"] {
+        assert_eq!(policy(name) & 1, 1, "{name}: {report}");
+    }
+    // No remote images, no low-label images, System32 first.
+    assert_eq!(policy("image_load") & 0b111, 0b111, "{report}");
 }
 
-#[test]
-fn hostile_components_are_contained() {
-    let hostile = component("nemein-fixture-hostile");
-    let deadline = ["--deadline-ms", "3000"];
-    let hang = request(Op::Parse, hostile.clone(), Vec::new(), "hang", "1");
-    let (answer, elapsed) = run(&hang, &deadline);
-    assert_eq!(host_code(&answer), code::TIMEOUT);
-    assert!(elapsed < Duration::from_secs(8), "{elapsed:?}");
-
-    let blocked = request(
-        Op::Describe,
-        component("nemein-fixture-hostile-describe"),
-        Vec::new(),
-        "",
-        "1",
-    );
-    assert_eq!(host_code(&run(&blocked, &deadline).0), code::TIMEOUT);
-
-    assert_eq!(
-        host_code(
-            &run(
-                &request(Op::Parse, hostile.clone(), Vec::new(), "grow", "1"),
-                &[]
-            )
-            .0
-        ),
-        code::CONNECTOR_TRAP
-    );
-    assert_eq!(
-        host_code(
-            &run(
-                &request(Op::Parse, hostile.clone(), Vec::new(), "huge", "1"),
-                &[]
-            )
-            .0
-        ),
-        code::OUTPUT_TOO_LARGE
-    );
-    assert_eq!(
-        host_code(
-            &run(
-                &request(Op::Parse, hostile.clone(), Vec::new(), "host-alloc", "1"),
-                &[]
-            )
-            .0
-        ),
-        code::CONNECTOR_TRAP
-    );
-    let manifest = request(
-        Op::Describe,
-        component("nemein-fixture-hostile-manifest"),
-        Vec::new(),
-        "",
-        "1",
-    );
-    assert_eq!(host_code(&run(&manifest, &[]).0), code::MANIFEST_TOO_LARGE);
-    let invalid = run(
-        &request(Op::Parse, hostile, Vec::new(), "invalid", "1"),
-        &[],
-    )
-    .0;
-    assert_eq!(header(&invalid)["status"], "ok");
-    assert_eq!(invalid.blobs[0], b"esto no es JSON");
+/// Whether this test process is inside a job, as CI runners may put it.
+fn in_a_job() -> bool {
+    let mut nested = 0;
+    let read = unsafe { IsProcessInJob(GetCurrentProcess(), null_mut(), &mut nested) };
+    assert_ne!(read, 0, "IsProcessInJob");
+    nested != 0
 }
 
 #[test]
@@ -252,6 +231,45 @@ fn the_memory_limit_is_reported() {
     let frame = request(Op::Describe, big, Vec::new(), "", "1");
     let (answer, _) = run(&frame, &["--memory-mb", "24"]);
     assert_eq!(host_code(&answer), code::MEMORY_LIMIT);
+}
+
+#[test]
+fn lowered_limits_are_accepted_at_their_bounds() {
+    let describe = request(
+        Op::Describe,
+        component("nemein-example-bank-csv"),
+        Vec::new(),
+        "",
+        "1",
+    );
+    // The highest values are the defaults; 200 MiB is plenty for the example.
+    for args in [
+        &["--deadline-ms", "10000", "--memory-mb", "256"][..],
+        &["--memory-mb", "200"],
+    ] {
+        let (answer, _) = run(&describe, args);
+        assert_eq!(header(&answer)["status"], "ok", "{args:?}");
+    }
+    // One millisecond is not enough to start the worker.
+    let (answer, _) = run(&describe, &["--deadline-ms", "1"]);
+    assert_eq!(host_code(&answer), code::TIMEOUT);
+    // The lowest memory is accepted: whatever the answer, `run` saw exit 0,
+    // not the refusal of a bad option.
+    let (answer, _) = run(&describe, &["--memory-mb", "16"]);
+    assert_ne!(header(&answer)["code"], code::REQUEST_INVALID);
+}
+
+#[test]
+fn a_worker_that_ends_without_answering_did_not_hit_the_memory_limit() {
+    // The probe without arguments exits at once and writes nothing.
+    let mut enclosed =
+        sandbox::spawn(Path::new(PROBE), &[], 256 * 1024 * 1024).expect("enclosed probe");
+    drop(enclosed.take_stdin());
+    let mut out = Vec::new();
+    enclosed.take_stdout().read_to_end(&mut out).unwrap();
+    assert!(out.is_empty());
+    enclosed.kill();
+    assert_eq!(enclosed.ending(), Ending::Other);
 }
 
 #[test]
@@ -339,7 +357,7 @@ fn rights_are_granted_on_the_binary_and_its_folder_only() {
         &[],
     );
     let sid = sandbox::container_sid().unwrap();
-    let binary = std::fs::canonicalize(SUPERVISOR).unwrap();
+    let binary = std::path::absolute(SUPERVISOR).unwrap();
     let folder = binary.parent().unwrap();
     let read_execute = 0x1200a9; // FILE_GENERIC_READ | FILE_GENERIC_EXECUTE
     assert_eq!(

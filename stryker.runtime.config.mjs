@@ -5,7 +5,8 @@ export default {
   mutate: [
     "scripts/prepare-desktop.js:6-12",
     "scripts/prepare-desktop.js:48-54",
-    "scripts/prepare-connector.js",
+    // The decisions; the CLI block that runs the real cargo is not mutated.
+    "scripts/prepare-connector.js:11-42",
   ],
   commandRunner: {
     command:

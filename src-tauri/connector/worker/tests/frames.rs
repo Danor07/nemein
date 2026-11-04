@@ -1,4 +1,4 @@
-//! The IPC vectors shared with the Node host (`test/fixtures/connector-frames.json`):
+//! The IPC vectors shared with the Node host (`worker/fixtures/frames.json`):
 //! Node encodes requests that this crate decodes, and this crate encodes the
 //! responses Node decodes.
 
@@ -6,8 +6,7 @@ use nemein_connector::frame::{self, Frame, Kind};
 use nemein_connector::protocol::{self, ConnectorError, Manifest, RequestHeader, ResponseHeader};
 
 fn vectors() -> serde_json::Value {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../test/fixtures/connector-frames.json");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/frames.json");
     serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
 }
 

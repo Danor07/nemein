@@ -15,8 +15,9 @@ export const LIMITS = Object.freeze({
   header: 65_536,
   output: 25_165_824,
   deadlineMs: 10_000,
-  // The supervisor enforces the deadline; this only covers a stuck supervisor.
-  graceMs: 5_000,
+  // The supervisor enforces the deadline; this backstop only covers a stuck
+  // supervisor: the deadline plus five seconds.
+  timeoutMs: 15_000,
 });
 
 const MAGIC = Buffer.from("NMC");
@@ -24,22 +25,22 @@ const VERSION = 1;
 const REQUEST = "Q".charCodeAt(0);
 const RESPONSE = "R".charCodeAt(0);
 
-// Failures the supervisor and the worker report, mapped to CONNECTOR_<code>.
-const HOST_CODES = new Set([
-  "REQUEST_INVALID",
-  "COMPONENT_INVALID",
-  "COMPONENT_HAS_IMPORTS",
-  "COMPONENT_WRONG_WORLD",
-  "CONNECTOR_TRAP",
-  "MANIFEST_TOO_LARGE",
-  "ERROR_TOO_LARGE",
-  "OUTPUT_TOO_LARGE",
-  "TIMEOUT",
-  "MEMORY_LIMIT",
-  "WORKER_CRASHED",
-  "WORKER_PROTOCOL",
-  "SANDBOX_UNAVAILABLE",
-  "UNSUPPORTED_PLATFORM",
+// Failures the supervisor and the worker report, and the code each becomes.
+const HOST_CODES = new Map([
+  ["REQUEST_INVALID", "CONNECTOR_REQUEST_INVALID"],
+  ["COMPONENT_INVALID", "CONNECTOR_COMPONENT_INVALID"],
+  ["COMPONENT_HAS_IMPORTS", "CONNECTOR_COMPONENT_HAS_IMPORTS"],
+  ["COMPONENT_WRONG_WORLD", "CONNECTOR_COMPONENT_WRONG_WORLD"],
+  ["CONNECTOR_TRAP", "CONNECTOR_TRAP"],
+  ["MANIFEST_TOO_LARGE", "CONNECTOR_MANIFEST_TOO_LARGE"],
+  ["ERROR_TOO_LARGE", "CONNECTOR_ERROR_TOO_LARGE"],
+  ["OUTPUT_TOO_LARGE", "CONNECTOR_OUTPUT_TOO_LARGE"],
+  ["TIMEOUT", "CONNECTOR_TIMEOUT"],
+  ["MEMORY_LIMIT", "CONNECTOR_MEMORY_LIMIT"],
+  ["WORKER_CRASHED", "CONNECTOR_WORKER_CRASHED"],
+  ["WORKER_PROTOCOL", "CONNECTOR_WORKER_PROTOCOL"],
+  ["SANDBOX_UNAVAILABLE", "CONNECTOR_SANDBOX_UNAVAILABLE"],
+  ["UNSUPPORTED_PLATFORM", "CONNECTOR_UNSUPPORTED_PLATFORM"],
 ]);
 
 const fail = (code, message, extra) =>
@@ -77,15 +78,13 @@ export function encodeRequest({ op, component, input, config, accountId }) {
 // the limits. Only the short prefix is merged while lengths are unknown; the
 // body is joined once, when complete. Bytes after the frame are an error.
 export function responseReader() {
-  let chunks = [];
+  const chunks = [];
   let length = 0;
   let expected = null;
   let frame = null;
   const protocol = (message) => fail("CONNECTOR_PROTOCOL", message);
-  const prefix = (n) => {
-    if (chunks[0].length < n) chunks = [Buffer.concat(chunks)];
-    return chunks[0];
-  };
+  // The first n bytes, copied; at most 14 bytes plus the 64 KiB header.
+  const prefix = (n) => Buffer.concat(chunks, n);
   function measure() {
     if (length < 5) return null;
     const head = prefix(5);
@@ -139,26 +138,21 @@ export function validateManifest(manifest) {
       "CONNECTOR_MANIFEST_INVALID",
       "El manifiesto del conector no cumple el contrato.",
     );
-  if (
-    !manifest ||
-    typeof manifest !== "object" ||
-    Array.isArray(manifest) ||
-    !isDeepStrictEqual(Object.keys(manifest), keys)
-  )
+  // Object.keys rejects arrays and primitives; only null and undefined throw.
+  if (!manifest || !isDeepStrictEqual(Object.keys(manifest), keys))
     throw invalid();
   const { id, version, name, description, extensions } = manifest;
-  const text = (value, min, max) =>
+  const text = (value, required, max) =>
     typeof value === "string" &&
-    chars(value) >= min &&
     chars(value) <= max &&
-    (min === 0 || hasContent(value));
+    (!required || hasContent(value));
   if (
     typeof id !== "string" ||
     id.length > 160 ||
     !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(id) ||
-    !text(version, 1, 80) ||
-    !text(name, 1, 80) ||
-    !text(description, 0, 500) ||
+    !text(version, true, 80) ||
+    !text(name, true, 80) ||
+    !text(description, false, 500) ||
     !Array.isArray(extensions) ||
     extensions.length > 8 ||
     !extensions.every(
@@ -172,7 +166,6 @@ export function validateManifest(manifest) {
 function validateConnectorError(error) {
   if (
     !error ||
-    typeof error !== "object" ||
     !isDeepStrictEqual(Object.keys(error), ["code", "message"]) ||
     typeof error.code !== "string" ||
     !/^[A-Z][A-Z0-9_]{0,63}$/.test(error.code) ||
@@ -229,10 +222,7 @@ export function interpret(frame, { op, accountId, expectedManifest }) {
       frame.blobs.length !== 0
     )
       throw fail("CONNECTOR_PROTOCOL", "Error de anfitrión desconocido.");
-    throw fail(
-      "CONNECTOR_" + header.code.replace(/^CONNECTOR_/, ""),
-      header.message,
-    );
+    throw fail(HOST_CODES.get(header.code), header.message);
   }
   if (status !== "ok" && status !== "connector_error")
     throw fail("CONNECTOR_PROTOCOL", "Estado de respuesta desconocido.");
@@ -294,9 +284,9 @@ export function interpret(frame, { op, accountId, expectedManifest }) {
 }
 
 // Runs `op` on `component`. Resolves with `{manifest}` or `{manifest, batch}`;
-// rejects with an Error carrying `code`. `binary`, `args` and `platform` are
-// injectable for tests; production uses NEMEIN_CONNECTOR_BIN set by the
-// desktop shell, on Windows only.
+// rejects with an Error carrying `code`. `command` is the supervisor, as a path
+// or `[path, ...args]` (tests); production uses NEMEIN_CONNECTOR_BIN, set by
+// the desktop shell, on Windows only. `platform` and `timeoutMs` are for tests.
 export function runConnector({
   op,
   component,
@@ -304,10 +294,9 @@ export function runConnector({
   config = "",
   accountId,
   expectedManifest,
-  binary = process.env.NEMEIN_CONNECTOR_BIN,
-  args = [],
+  command = process.env.NEMEIN_CONNECTOR_BIN,
   platform = process.platform,
-  timeoutMs = LIMITS.deadlineMs + LIMITS.graceMs,
+  timeoutMs = LIMITS.timeoutMs,
 }) {
   return new Promise((resolve, reject) => {
     if (platform !== "win32")
@@ -318,23 +307,24 @@ export function runConnector({
         ),
       );
     validateRequest({ op, component, input, config, accountId });
-    if (!binary)
+    if (!command)
       return reject(
         fail(
           "CONNECTOR_UNAVAILABLE",
           "No se encontró el ejecutable de conectores.",
         ),
       );
-    const child = spawn(binary, args, {
+    const [file, ...args] = [command].flat();
+    // Only SystemRoot: the supervisor needs nothing else from Node's
+    // environment, and a stderr nobody reads must not be able to block it.
+    const child = spawn(file, args, {
       stdio: ["pipe", "pipe", "ignore"],
       windowsHide: true,
       env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" },
     });
     const reader = responseReader();
-    let settled = false;
+    // Promises settle once; the first outcome wins.
     const finish = (error, value) => {
-      if (settled) return;
-      settled = true;
       clearTimeout(timer);
       child.stdin.destroy();
       if (error) {
@@ -382,8 +372,17 @@ export function runConnector({
         ),
       ),
     );
-    // EPIPE when the supervisor dies early; the close event reports it.
-    child.stdin.on("error", () => {});
+    // EPIPE: the supervisor stopped reading before the whole request arrived.
+    // Whatever it says next would not answer this request.
+    child.stdin.on("error", (cause) =>
+      finish(
+        fail(
+          "CONNECTOR_SUPERVISOR_FAILED",
+          "El supervisor de conectores no recibió la solicitud completa.",
+          { cause },
+        ),
+      ),
+    );
     // stdin stays open until the answer: closing it would cancel the run.
     child.stdin.write(
       encodeRequest({ op, component, input, config, accountId }),

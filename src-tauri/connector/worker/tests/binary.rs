@@ -1,6 +1,6 @@
-//! The binary off Windows: it reads the request and refuses with a clear
-//! answer, never running a connector without its enclosure.
-#![cfg(not(windows))]
+//! The binary's own checks: off Windows it reads the request and refuses with
+//! a clear answer, never running a connector without its enclosure; on every
+//! system, bad requests and options are answered before anything runs.
 
 use nemein_connector::frame::{self, Kind};
 use nemein_connector::protocol::{self, Op, RequestHeader};
@@ -44,6 +44,7 @@ fn valid_request() -> Vec<u8> {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn supervisor_and_worker_refuse_off_windows() {
     for args in [
         &[][..],

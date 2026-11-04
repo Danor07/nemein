@@ -24,7 +24,7 @@ const described = await runConnector({
   op: "describe",
   component,
   accountId: "1",
-  binary,
+  command: binary,
 });
 assert.deepEqual(described.manifest, manifest);
 const started = performance.now();
@@ -33,7 +33,7 @@ const parsed = await runConnector({
   component,
   input: readFileSync(new URL("extracto.csv", fixtures)),
   accountId: "1",
-  binary,
+  command: binary,
   expectedManifest: manifest,
 });
 const elapsed = Math.round(performance.now() - started);

@@ -20,6 +20,18 @@ pub enum Ending {
     Other,
 }
 
+/// How a worker that ended without a frame ended, from what its job saw:
+/// whether the job reported the memory limit, and its peak commit. The report
+/// may be lost (only notification limits are delivered for sure), so a peak
+/// of at least nine tenths of the limit counts as the limit too.
+pub fn memory_verdict(reported: bool, peak: usize, limit: usize) -> Ending {
+    if reported || peak >= limit / 10 * 9 {
+        Ending::MemoryLimit
+    } else {
+        Ending::Other
+    }
+}
+
 /// One enclosed worker process.
 pub trait Worker: Send {
     /// The pipe to the worker's stdin; taken once.
@@ -93,4 +105,21 @@ pub fn supervise(
     };
     worker.kill();
     outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reported_limit_or_a_peak_near_it_is_the_memory_limit() {
+        let limit = 256 * 1024 * 1024;
+        // 268_435_456 / 10 * 9, in integers.
+        let threshold = 241_591_905;
+        assert_eq!(memory_verdict(false, 0, limit), Ending::Other);
+        assert_eq!(memory_verdict(true, 0, limit), Ending::MemoryLimit);
+        assert_eq!(memory_verdict(false, threshold, limit), Ending::MemoryLimit);
+        assert_eq!(memory_verdict(false, threshold - 1, limit), Ending::Other);
+        assert_eq!(memory_verdict(false, limit, limit), Ending::MemoryLimit);
+    }
 }

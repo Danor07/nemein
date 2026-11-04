@@ -23,7 +23,7 @@
 //!
 //! Nothing here falls back: if any step fails, the connector does not run.
 
-use crate::supervise::{Ending, Worker};
+use crate::supervise::{memory_verdict, Ending, Worker};
 use std::ffi::{c_void, OsStr};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -96,31 +96,67 @@ const MITIGATION_IMAGE_LOAD_NO_REMOTE: u64 = 1 << 52;
 const MITIGATION_IMAGE_LOAD_NO_LOW_LABEL: u64 = 1 << 56;
 const MITIGATION_IMAGE_LOAD_PREFER_SYSTEM32: u64 = 1 << 60;
 
+/// The union of `flags`. Every flag set below is built here, so a flag is in a
+/// set exactly when it is listed.
+fn union<T: Copy + Default + std::ops::BitOr<Output = T>>(flags: &[T]) -> T {
+    flags.iter().fold(T::default(), |all, &flag| all | flag)
+}
+
 /// Mitigations set before the worker starts, Chromium's JIT-compatible set.
 /// Dynamic code stays allowed: Cranelift writes machine code at run time.
 /// Strict handle checks are left out: Chromium applies them only after start.
-pub const MITIGATIONS: u64 = MITIGATION_HEAP_TERMINATE
-    | MITIGATION_BOTTOM_UP_ASLR
-    | MITIGATION_HIGH_ENTROPY_ASLR
-    | MITIGATION_WIN32K_SYSTEM_CALL_DISABLE
-    | MITIGATION_EXTENSION_POINT_DISABLE
-    | MITIGATION_FONT_DISABLE
-    | MITIGATION_IMAGE_LOAD_NO_REMOTE
-    | MITIGATION_IMAGE_LOAD_NO_LOW_LABEL
-    | MITIGATION_IMAGE_LOAD_PREFER_SYSTEM32;
+pub fn mitigations() -> u64 {
+    union(&[
+        MITIGATION_HEAP_TERMINATE,
+        MITIGATION_BOTTOM_UP_ASLR,
+        MITIGATION_HIGH_ENTROPY_ASLR,
+        MITIGATION_WIN32K_SYSTEM_CALL_DISABLE,
+        MITIGATION_EXTENSION_POINT_DISABLE,
+        MITIGATION_FONT_DISABLE,
+        MITIGATION_IMAGE_LOAD_NO_REMOTE,
+        MITIGATION_IMAGE_LOAD_NO_LOW_LABEL,
+        MITIGATION_IMAGE_LOAD_PREFER_SYSTEM32,
+    ])
+}
 
 /// UI restrictions, as Chromium applies them to its sandboxed processes.
-const UI_RESTRICTIONS: u32 = JOB_OBJECT_UILIMIT_DESKTOP
-    | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
-    | JOB_OBJECT_UILIMIT_EXITWINDOWS
-    | JOB_OBJECT_UILIMIT_GLOBALATOMS
-    | JOB_OBJECT_UILIMIT_HANDLES
-    | JOB_OBJECT_UILIMIT_READCLIPBOARD
-    | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
-    | JOB_OBJECT_UILIMIT_WRITECLIPBOARD;
+pub fn ui_restrictions() -> u32 {
+    union(&[
+        JOB_OBJECT_UILIMIT_DESKTOP,
+        JOB_OBJECT_UILIMIT_DISPLAYSETTINGS,
+        JOB_OBJECT_UILIMIT_EXITWINDOWS,
+        JOB_OBJECT_UILIMIT_GLOBALATOMS,
+        JOB_OBJECT_UILIMIT_HANDLES,
+        JOB_OBJECT_UILIMIT_READCLIPBOARD,
+        JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS,
+        JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+    ])
+}
+
+/// Limits of the worker's job.
+pub fn job_limits() -> u32 {
+    union(&[
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
+        JOB_OBJECT_LIMIT_JOB_MEMORY,
+        JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION,
+    ])
+}
 
 /// Read and execute: what loading the binary and listing its folder need.
-const GRANTED: u32 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
+pub fn granted() -> u32 {
+    union(&[FILE_GENERIC_READ, FILE_GENERIC_EXECUTE])
+}
+
+/// Suspended until it is in the job, with no console and a wide environment.
+fn creation_flags() -> u32 {
+    union(&[
+        EXTENDED_STARTUPINFO_PRESENT,
+        CREATE_SUSPENDED,
+        DETACHED_PROCESS,
+        CREATE_UNICODE_ENVIRONMENT,
+    ])
+}
 
 fn wide(text: impl AsRef<OsStr>) -> Vec<u16> {
     text.as_ref().encode_wide().chain(Some(0)).collect()
@@ -233,7 +269,7 @@ pub fn effective_rights(path: &Path, sid: &ContainerSid) -> Result<u32, String> 
 /// Grants read and execute on exactly `path` to `sid`, not inherited by its
 /// children. Does nothing when the right is already there.
 pub fn grant(path: &Path, sid: &ContainerSid) -> Result<(), String> {
-    if effective_rights(path, sid)? & GRANTED == GRANTED {
+    if effective_rights(path, sid)? & granted() == granted() {
         return Ok(());
     }
     let name = wide(path);
@@ -258,7 +294,7 @@ pub fn grant(path: &Path, sid: &ContainerSid) -> Result<(), String> {
         ));
     }
     let entry = EXPLICIT_ACCESS_W {
-        grfAccessPermissions: GRANTED,
+        grfAccessPermissions: granted(),
         grfAccessMode: GRANT_ACCESS,
         grfInheritance: NO_INHERITANCE,
         Trustee: trustee(sid),
@@ -351,9 +387,8 @@ impl Worker for Enclosed {
     }
 
     fn ending(&mut self) -> Ending {
-        // The job posts a message when a process tries to commit past the
-        // limit, but delivery is only guaranteed for notification limits, so
-        // the peak commit corroborates it.
+        // Every message the job posted, without waiting for more.
+        let mut reported = false;
         loop {
             let (mut message, mut key, mut overlapped) = (0u32, 0usize, null_mut::<OVERLAPPED>());
             let got = unsafe {
@@ -365,14 +400,10 @@ impl Worker for Enclosed {
             if message == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT
                 || message == JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT
             {
-                return Ending::MemoryLimit;
+                reported = true;
             }
         }
-        if self.peak_memory() >= self.memory / 10 * 9 {
-            Ending::MemoryLimit
-        } else {
-            Ending::Other
-        }
+        memory_verdict(reported, self.peak_memory(), self.memory)
     }
 }
 
@@ -389,10 +420,7 @@ fn job(memory: usize) -> Result<(Owned, Owned), String> {
         return Err(last_error("CreateJobObjectW"));
     }
     let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
-    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
-        | JOB_OBJECT_LIMIT_JOB_MEMORY
-        | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
+    limits.BasicLimitInformation.LimitFlags = job_limits();
     limits.BasicLimitInformation.ActiveProcessLimit = 1;
     limits.JobMemoryLimit = memory;
     let port = Owned(unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, null_mut(), 0, 1) });
@@ -431,7 +459,7 @@ fn restrict_ui(job: &Owned, process: &Owned) -> Result<bool, String> {
         return Ok(false);
     }
     let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
-        UIRestrictionsClass: UI_RESTRICTIONS,
+        UIRestrictionsClass: ui_restrictions(),
     };
     let set = unsafe {
         SetInformationJobObject(
@@ -486,9 +514,14 @@ fn environment() -> Vec<u16> {
 }
 
 /// Starts `program args` enclosed, with `memory` bytes of committed memory.
-pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Worker>, String> {
+pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Enclosed, String> {
+    // Absolute, without the `\\?\` prefix that `canonicalize` adds:
+    // CreateProcessW refuses that form as the working directory.
     let program =
-        std::fs::canonicalize(program).map_err(|e| format!("{}: {e}", program.display()))?;
+        std::path::absolute(program).map_err(|e| format!("{}: {e}", program.display()))?;
+    if !program.is_file() {
+        return Err(format!("no existe el binario {}", program.display()));
+    }
     let folder = program
         .parent()
         .ok_or("el binario no tiene carpeta")?
@@ -522,7 +555,7 @@ pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Wor
     let lpac: u32 = PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
     let inherited: [HANDLE; 2] = [child_in.0, child_out.0];
     let children: u32 = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
-    let mitigations: u64 = MITIGATIONS;
+    let mitigations: u64 = mitigations();
     let attributes: [(usize, *const c_void, usize); 5] = [
         (
             PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES as usize,
@@ -578,10 +611,7 @@ pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Wor
             null(),
             null(),
             TRUE,
-            EXTENDED_STARTUPINFO_PRESENT
-                | CREATE_SUSPENDED
-                | DETACHED_PROCESS
-                | CREATE_UNICODE_ENVIRONMENT,
+            creation_flags(),
             environment.as_ptr() as *const c_void,
             directory.as_ptr(),
             &startup.StartupInfo,
@@ -616,7 +646,7 @@ pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Wor
     drop(child_out);
     let stdin = unsafe { File::from_raw_handle(parent_in.into_raw() as _) };
     let stdout = unsafe { File::from_raw_handle(parent_out.into_raw() as _) };
-    Ok(Box::new(Enclosed {
+    Ok(Enclosed {
         job,
         process,
         port,
@@ -624,13 +654,13 @@ pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Wor
         ui_restricted,
         stdin: Some(stdin),
         stdout: Some(stdout),
-    }))
+    })
 }
 
 /// The supervisor's way to start the worker: this same binary, `worker`.
 pub fn spawn_worker(memory: usize) -> Result<Box<dyn Worker>, String> {
     let program = std::env::current_exe().map_err(|e| e.to_string())?;
-    spawn(&program, &["worker"], memory)
+    Ok(Box::new(spawn(&program, &["worker"], memory)?))
 }
 
 /// The worker's own check, before reading anything: it must be in an
@@ -660,4 +690,36 @@ pub fn verify_enclosed() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_union_keeps_every_bit_once() {
+        assert_eq!(union::<u32>(&[]), 0);
+        assert_eq!(union(&[0b0110u32, 0b0011]), 0b0111);
+        assert_eq!(union(&[0b1000u64, 0b1000]), 0b1000);
+    }
+
+    // Known answers, written from the values winbase.h and winnt.h document,
+    // so a shifted or dropped flag fails here even where no run can see it
+    // (heap termination cannot be queried from inside the process).
+    #[test]
+    fn the_flag_sets_are_the_documented_values() {
+        // PROCESS_CREATION_MITIGATION_POLICY_*_ALWAYS_ON: 1 << 12, 16, 20,
+        // 28, 32, 48, 52, 56 and 60.
+        assert_eq!(mitigations(), 0x1111_0001_1011_1000);
+        // JOB_OBJECT_UILIMIT_*: all eight classes, 0x01 through 0x80.
+        assert_eq!(ui_restrictions(), 0xff);
+        // KILL_ON_JOB_CLOSE 0x2000, ACTIVE_PROCESS 0x8, JOB_MEMORY 0x200,
+        // DIE_ON_UNHANDLED_EXCEPTION 0x400.
+        assert_eq!(job_limits(), 0x2608);
+        // FILE_GENERIC_READ 0x120089 | FILE_GENERIC_EXECUTE 0x1200a0.
+        assert_eq!(granted(), 0x1200a9);
+        // EXTENDED_STARTUPINFO_PRESENT 0x80000, CREATE_SUSPENDED 0x4,
+        // DETACHED_PROCESS 0x8, CREATE_UNICODE_ENVIRONMENT 0x400.
+        assert_eq!(creation_flags(), 0x8040c);
+    }
 }

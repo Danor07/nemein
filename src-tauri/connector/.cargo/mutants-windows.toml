@@ -1,0 +1,13 @@
+# cargo-mutants over the Windows enclosure, run only on Windows CI:
+# worker/src/sandbox.rs (AppContainer, Job, pipes, rights) and
+# worker/src/main.rs (supervisor and worker entry points). They are judged by
+# the known-answer unit tests of the flag sets, the enclosure tests in
+# worker/tests/sandbox.rs and the option checks in worker/tests/binary.rs.
+# The CI job splits the run into four shards and the shared gate judges them
+# as one run: 90 % and no timeouts.
+examine_globs = ["worker/src/sandbox.rs", "worker/src/main.rs"]
+features = ["nemein-connector/test-worker"]
+additional_cargo_test_args = ["--lib", "--test", "sandbox", "--test", "binary"]
+copy_target = true
+# The first test run in each copy builds the example component.
+minimum_test_timeout = 300

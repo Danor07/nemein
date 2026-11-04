@@ -59,7 +59,7 @@ test(
         component: readFileSync(${JSON.stringify(component)}),
         config: "hang",
         accountId: "1",
-        binary: ${JSON.stringify(binary)},
+        command: ${JSON.stringify(binary)},
         timeoutMs: 600000,
       }).catch(() => {});
       setInterval(() => {}, 1000);`;

@@ -86,3 +86,20 @@ El workspace `src-tauri/connector` (WIT, SDK, conector de ejemplo y `nemein-comp
 
 Estos jobs corren en el runner, no en el contenedor aislado del job Linux: Cargo descarga antes y las pruebas corren con `CARGO_NET_OFFLINE`. El contrato del ejemplo también se prueba en Node, dentro de los jobs existentes. Localmente: `npm run connector:check`; la mutación se describe en [conectores](conectores.md). `npm run quality` no compila Rust.
 
+## Conectores WASM P3.2
+
+El trabajador encerrado agrega tres jobs, todos requeridos por `Quality gate`:
+
+- `Connector component` y `Connector mutation` ya incluyen las partes portables de `nemein-connector`: tramas, protocolo, ejecución con wasmtime, supervisor y límites.
+- `Connector sandbox (Windows)` corre en windows-2022: Clippy del encierro sin advertencias, las pruebas del encierro real y la cadena Node, supervisor y trabajador.
+- `Connector enclosure mutation` mide `sandbox.rs` y `main.rs` con cargo-mutants en cuatro shards de Windows. El job siguiente pasa los cuatro `outcomes.json` al mismo verificador, que los juzga como una sola corrida: mínimo 90 %, sin Timeout, Failure ni una línea base fallida en cualquiera de los shards.
+
+Dos decisiones evitan mutantes que ninguna prueba puede matar sin bajar el umbral:
+
+- Los conjuntos de banderas (mitigaciones, UI, límites del Job, permisos y creación del proceso) se arman con una sola función de unión. Con `A | B` escrito a mano, cambiar `|` por `^` da el mismo valor cuando los bits no se pisan. La función se prueba con bits que sí se pisan, y pruebas de respuesta conocida fijan cada conjunto en su valor documentado.
+- La decisión de memoria (mensaje del Job o pico de al menos nueve décimos del límite) es una función pura de `supervise.rs`, probada en sus bordes en Linux.
+
+La sonda nativa compara lo que el encierro aplicó, leído desde adentro, con valores escritos a mano, nunca con las funciones que los arman.
+
+Stryker suma el alcance `connector-runner` sobre `src/connector-runner.js`. El supervisor falso termina solo a los 8 s, así que un mutante que deja colgado al ejecutor falla una aserción y no llega al plazo de Stryker.
+

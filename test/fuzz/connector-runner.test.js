@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import fc from "fast-check";
 import { interpret, responseReader } from "../../src/connector-runner.js";
-import vectors from "../fixtures/connector-frames.json" with { type: "json" };
+import vectors from "../../src-tauri/connector/worker/fixtures/frames.json" with { type: "json" };
 
 const fixtures = new URL(
   "../../src-tauri/connector/examples/fictitious-bank-csv/fixtures/",

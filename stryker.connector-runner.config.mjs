@@ -16,7 +16,7 @@ export default {
     "!test/properties/connector-runner.property.test.js",
     "!test/fuzz/connector-runner.test.js",
     "!test/helpers/fake-connector.js",
-    "!test/fixtures/connector-frames.json",
+    "!src-tauri/connector/worker/fixtures/frames.json",
     "!src-tauri/connector/examples/fictitious-bank-csv/fixtures/**",
   ],
   jsonReporter: { fileName: "reports/connector-runner-mutation/mutation.json" },

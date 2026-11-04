@@ -192,6 +192,72 @@ test("cargo-mutants outcomes use the same gate, without unviable mutants", () =>
     );
 });
 
+test("cargo-mutants shards are judged as one run, each with its own baseline", () => {
+  const killed = (n) => Array(n).fill("CaughtMutant");
+  // 9 of 10 overall, though the second shard alone is at 80 %.
+  assert.equal(
+    mutationGate(
+      cargoMutantsReport(lab(killed(5)), lab([...killed(4), "MissedMutant"])),
+    ),
+    90,
+  );
+  assert.throws(
+    () =>
+      mutationGate(
+        cargoMutantsReport(
+          lab([...killed(4), "MissedMutant"]),
+          lab([...killed(4), "MissedMutant"]),
+        ),
+      ),
+    /Mutation score below 90: 80/,
+  );
+  assert.throws(
+    () => cargoMutantsReport(lab(killed(5)), lab(killed(5), [])),
+    /baseline did not succeed/,
+  );
+  assert.throws(
+    () => mutationGate(cargoMutantsReport(lab(killed(5)), lab(["Timeout"]))),
+    /Mutation run contains/,
+  );
+  assert.throws(() => cargoMutantsReport(), /Not a cargo-mutants/);
+  assert.throws(
+    () => cargoMutantsReport(lab(killed(5)), null),
+    /Not a cargo-mutants/,
+  );
+  const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-cargo-shards-"));
+  try {
+    const script = fileURLToPath(
+      new URL("../scripts/mutation-gate.js", import.meta.url),
+    );
+    const files = [lab(killed(5)), lab([...killed(4), "MissedMutant"])].map(
+      (shard, index) => {
+        const file = path.join(dir, `shard-${index}.json`);
+        writeFileSync(file, JSON.stringify(shard));
+        return file;
+      },
+    );
+    let child = spawnSync(
+      process.execPath,
+      [script, "--cargo-mutants", ...files],
+      { encoding: "utf8" },
+    );
+    assert.equal(child.status, 0, child.stderr);
+    assert.equal(child.stdout.trim(), "Mutation gate: 90.00%");
+    child = spawnSync(process.execPath, [script, "--cargo-mutants", files[1]], {
+      encoding: "utf8",
+    });
+    assert.notEqual(child.status, 0);
+    assert.match(child.stderr, /below 90: 80/);
+    child = spawnSync(process.execPath, [script, "--cargo-mutants"], {
+      encoding: "utf8",
+    });
+    assert.notEqual(child.status, 0);
+    assert.match(child.stderr, /Not a cargo-mutants/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("PBT: cargo-mutants score ignores unviable mutants and keeps the 90 boundary", () => {
   fc.assert(
     fc.property(

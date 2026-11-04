@@ -188,10 +188,82 @@ jobs:
           $env:NEMEIN_CONNECTOR_CHAIN_COMPONENT = "$env:RUNNER_TEMP\hostile.wasm"
           node --test test/connector-chain.test.js
 
+  # cargo-mutants over the enclosure decisions (worker/src/sandbox.rs and
+  # worker/src/main.rs), judged by the real enclosure tests. Each mutant needs
+  # a Windows build and enclosed runs, so the run is split round-robin into
+  # four shards; the next job judges them as one run.
+  connector-windows-mutation:
+    name: Connector enclosure mutation ${{ matrix.shard }}/4
+    runs-on: windows-2022
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: cargo install cargo-mutants --locked --version 27.1.0
+      - run: cargo fetch --locked
+        working-directory: src-tauri/connector
+      # copy_target in .cargo/mutants-windows.toml hands this target/ to every build copy.
+      - name: Unmutated enclosure tests build dependencies once
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --locked -p nemein-connector --features test-worker --lib --test sandbox --test binary
+      - name: 4 - Mutation shard
+        working-directory: src-tauri/connector
+        shell: bash
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          status=0
+          cargo mutants --config .cargo/mutants-windows.toml --shard ${{ matrix.shard }}/4 --sharding round-robin --cargo-arg=--locked -j 2 || status=$?
+          test "$status" -eq 0 || test "$status" -eq 2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mutation-report-connector-windows-${{ matrix.shard }}
+          path: src-tauri/connector/mutants.out/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  connector-windows-mutation-gate:
+    name: Connector enclosure mutation
+    needs: connector-windows-mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: mutation-report-connector-windows-*
+          path: ${{ runner.temp }}/shards
+      - name: 4 - Mutation score over the four shards
+        run: node scripts/mutation-gate.js --cargo-mutants "$RUNNER_TEMP"/shards/mutation-report-connector-windows-{0,1,2,3}/outcomes.json
+
   # Branch protection requires this name, so it must fail whenever a needed job does not succeed.
   quality:
     name: Quality gate
-    needs: [checks, mutation, connector, connector-mutation, connector-windows]
+    needs:
+      [
+        checks,
+        mutation,
+        connector,
+        connector-mutation,
+        connector-windows,
+        connector-windows-mutation-gate,
+      ]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -203,7 +275,8 @@ jobs:
           CONNECTOR: ${{ needs.connector.result }}
           CONNECTOR_MUTATION: ${{ needs.connector-mutation.result }}
           CONNECTOR_WINDOWS: ${{ needs.connector-windows.result }}
-        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success && test "$CONNECTOR_WINDOWS" = success
+          CONNECTOR_WINDOWS_MUTATION: ${{ needs.connector-windows-mutation-gate.result }}
+        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success && test "$CONNECTOR_WINDOWS" = success && test "$CONNECTOR_WINDOWS_MUTATION" = success
 
   native-static:
     name: Native static gate
