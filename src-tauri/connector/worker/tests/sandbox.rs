@@ -149,7 +149,13 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
 
     // Positive control: the same probe, unenclosed, can do all of it.
     let control = Command::new(PROBE).args(args).output().unwrap();
-    let control: serde_json::Value = serde_json::from_slice(&control.stdout).unwrap();
+    let control: serde_json::Value = serde_json::from_slice(&control.stdout).unwrap_or_else(|e| {
+        panic!(
+            "control output: {:?} ({e}), status {:?}",
+            String::from_utf8_lossy(&control.stdout),
+            control.status
+        )
+    });
     for capability in ["read", "write", "network", "process"] {
         assert_eq!(
             control[capability], "allowed",

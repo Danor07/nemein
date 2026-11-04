@@ -43,7 +43,6 @@ mod enclosure {
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
     use windows_sys::Win32::Security::{
         GetTokenInformation, TokenCapabilities, TokenIsAppContainer, TokenSecurityAttributes,
-        CLAIM_SECURITY_ATTRIBUTES_INFORMATION, CLAIM_SECURITY_ATTRIBUTE_TYPE_UINT64,
         TOKEN_INFORMATION_CLASS, TOKEN_QUERY,
     };
     use windows_sys::Win32::System::JobObjects::{
@@ -98,17 +97,35 @@ mod enclosure {
         }
     }
 
-    /// A NUL-terminated UTF-16 string from the system.
-    unsafe fn wide_text(text: *const u16) -> String {
-        if text.is_null() {
-            return String::new();
-        }
-        let mut length = 0;
-        while unsafe { *text.add(length) } != 0 {
-            length += 1;
-        }
-        String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(text, length) })
+    // `TokenSecurityAttributes` answers in the kernel's layout (ntseapi.h),
+    // whose names are UNICODE_STRINGs, not the CLAIM_* structures of the SDK.
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *const u16,
     }
+
+    #[repr(C)]
+    struct TokenSecurityAttributeV1 {
+        name: UnicodeString,
+        value_type: u16,
+        reserved: u16,
+        flags: u32,
+        value_count: u32,
+        values: *const c_void,
+    }
+
+    #[repr(C)]
+    struct TokenSecurityAttributesInformation {
+        version: u16,
+        reserved: u16,
+        attribute_count: u32,
+        attributes: *const TokenSecurityAttributeV1,
+    }
+
+    /// TOKEN_SECURITY_ATTRIBUTE_TYPE_UINT64.
+    const ATTRIBUTE_UINT64: u16 = 2;
 
     /// The `WIN://NOALLAPPPKG` security attribute, which is how Windows marks
     /// a less privileged AppContainer (observed; not in the SDK headers).
@@ -132,20 +149,29 @@ mod enclosure {
         if read == 0 {
             return -1;
         }
-        let info = unsafe { &*(buffer.as_ptr() as *const CLAIM_SECURITY_ATTRIBUTES_INFORMATION) };
-        if info.AttributeCount == 0 {
+        let info = unsafe { &*(buffer.as_ptr() as *const TokenSecurityAttributesInformation) };
+        if info.attribute_count == 0 || info.attributes.is_null() {
             return 0;
         }
-        let attributes = unsafe {
-            std::slice::from_raw_parts(info.Attribute.pAttributeV1, info.AttributeCount as usize)
-        };
+        let attributes =
+            unsafe { std::slice::from_raw_parts(info.attributes, info.attribute_count as usize) };
         for attribute in attributes {
-            let name = unsafe { wide_text(attribute.Name) };
+            let name = if attribute.name.buffer.is_null() {
+                String::new()
+            } else {
+                String::from_utf16_lossy(unsafe {
+                    std::slice::from_raw_parts(
+                        attribute.name.buffer,
+                        usize::from(attribute.name.length) / 2,
+                    )
+                })
+            };
             if name.eq_ignore_ascii_case("WIN://NOALLAPPPKG")
-                && attribute.ValueType == CLAIM_SECURITY_ATTRIBUTE_TYPE_UINT64
-                && attribute.ValueCount >= 1
+                && attribute.value_type == ATTRIBUTE_UINT64
+                && attribute.value_count >= 1
+                && !attribute.values.is_null()
             {
-                return unsafe { *attribute.Values.pUint64 } as i64;
+                return unsafe { *(attribute.values as *const u64) } as i64;
             }
         }
         0
