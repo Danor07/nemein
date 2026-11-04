@@ -2,9 +2,9 @@ export default {
   mutate: [
     "src/import-contract.js",
     "src/date.js",
-    "src/core.js:244-247",
-    "src/core.js:306-330",
-    "src/core.js:346-346",
+    "src/core.js:246-249",
+    "src/core.js:308-332",
+    "src/core.js:361-361",
   ],
   testRunner: "command",
   commandRunner: {

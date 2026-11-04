@@ -2,8 +2,8 @@ export default {
   mutate: [
     "src/backup.js",
     "src/reviews.js",
-    "src/core.js:108-146",
-    "src/core.js:378-379",
+    "src/core.js:110-148",
+    "src/core.js:393-394",
     "src/planning.js:2-6",
     "src/access.js:64-76",
     "src/access.js:600-600",

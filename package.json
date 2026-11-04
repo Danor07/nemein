@@ -24,7 +24,8 @@
     "mutation:workflow": "stryker run stryker.workflow.config.mjs && node scripts/mutation-gate.js reports/workflow-mutation/mutation.json",
     "mutation:runtime": "stryker run stryker.runtime.config.mjs && node scripts/mutation-gate.js reports/runtime-mutation/mutation.json",
     "mutation:connector-runner": "stryker run stryker.connector-runner.config.mjs && node scripts/mutation-gate.js reports/connector-runner-mutation/mutation.json",
-    "test:mutation": "npm run mutation:api-contract && npm run mutation:api && npm run mutation:import && npm run mutation:statement && npm run mutation:export && npm run mutation:main && npm run mutation:workflow && npm run mutation:runtime && npm run mutation:connector-runner",
+    "mutation:connectors": "stryker run stryker.connectors.config.mjs && node scripts/mutation-gate.js reports/connectors-mutation/mutation.json",
+    "test:mutation": "npm run mutation:api-contract && npm run mutation:api && npm run mutation:import && npm run mutation:statement && npm run mutation:export && npm run mutation:main && npm run mutation:workflow && npm run mutation:runtime && npm run mutation:connector-runner && npm run mutation:connectors",
     "quality": "npm run lint && npm run test:unit && npm run test:pbt && npm run test:fuzz && npm run test:mutation",
     "connector:check": "cd src-tauri/connector && cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo clippy --locked --target wasm32-unknown-unknown -p nemein-connector-sdk -p nemein-example-bank-csv -- -D warnings && cargo test --locked -p nemein-connector-sdk && cargo test --locked -p nemein-example-bank-csv && cargo test --locked -p nemein-connector-tools",
     "openapi:generate": "node scripts/generate-openapi.js"

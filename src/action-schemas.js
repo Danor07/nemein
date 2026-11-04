@@ -125,6 +125,15 @@ export const actionShapes = Object.freeze({
     commit: z.boolean().optional(),
   },
   backup: {},
+  connectors: {},
+  "connector-prepare": {
+    hash: z.string(),
+    account_id: id,
+    content_base64: z.string(),
+    config: z.string().optional(),
+    category_id: id.optional(),
+  },
+  "connector-import": { id: z.string(), batch_sha256: z.string() },
   "review-package": { from: z.string(), to: z.string(), as_of: z.string() },
   "review-save": {
     id: z.string(),

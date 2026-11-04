@@ -6,10 +6,11 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { openBudget } from "../src/core.js";
 import { eventOperations } from "../src/events.js";
+import { fakeRunner, importThroughConnector } from "./helpers/connector-budget.js";
 
-function fixture(t) {
+function fixture(t, options) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "nemein-events-"));
-  const b = openBudget(dir);
+  const b = openBudget(dir, options);
   b.testReaders = [];
   t.after(() => {
     for (const reader of b.testReaders) if (reader.open) reader.close();
@@ -87,8 +88,8 @@ test("events: insertion failure rolls back single and composite operations", (t)
   assert.equal(events(b).length, 2); // depth restored after failure
 });
 
-test("events: every mutation covered, nested calls grouped, previews silent", (t) => {
-  const b = fixture(t),
+test("events: every mutation covered, nested calls grouped, previews silent", async (t) => {
+  const b = fixture(t, { runConnector: fakeRunner() }),
     a = account(b);
   const c = b.createAccount({ name: "Other", type: "efectivo" });
   const g = b.createGroup({ name: "Group" });
@@ -138,6 +139,13 @@ test("events: every mutation covered, nested calls grouped, previews silent", (t
   b.snapshot("2026-01");
   assert.equal(events(b).length, before);
   b.reconcile(p, true);
+  // Installing, enabling and preparing leave the budget as it was; only the
+  // confirmation is a budget change.
+  before = events(b).length;
+  const { result } = await importThroughConnector(b, a, { category_id: cat });
+  assert.equal(result.added, 5);
+  assert.equal(events(b).length, before + 1);
+  assert.equal(events(b).at(-1).event.data.operation, "confirmConnectorImport");
   assert.deepEqual(
     new Set(events(b).map((r) => r.event.data.operation)),
     new Set(eventOperations),
@@ -165,7 +173,7 @@ test("events: existing ledger gets no fabricated history; budgets have separate 
   const b = fixture(t),
     id = account(b);
   b.addTransaction(tx(id));
-  b.db.exec("DROP TABLE schema_migrations; DROP TABLE reviews; PRAGMA user_version=1; DROP TABLE budget_events; DROP TABLE event_identity");
+  b.db.exec("DROP TABLE schema_migrations; DROP TABLE connector_batches; DROP TABLE reviews; PRAGMA user_version=1; DROP TABLE budget_events; DROP TABLE event_identity");
   b.close();
   const migrated = openBudget(b.dir);
   try {

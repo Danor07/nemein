@@ -2,7 +2,12 @@
 
 Un conector es una función pura: recibe los bytes de un archivo que eligió el propietario y devuelve un [lote de importación v1](importaciones.md). Corre aparte, sin acceso al presupuesto, y su salida nunca escribe por sí misma: el anfitrión la valida y la pasa por la revisión y la confirmación protegida.
 
-**Estado.** P3.1 fijó el contrato y la receta. P3.2 agrega el trabajador encerrado `nemein-connector`, su empaquetado y el ejecutor de Node que lo usa (`src/connector-runner.js`); todavía no hay flujo en la aplicación que lo llame. La preparación, revisión y confirmación del lote, junto con la instalación, habilitación, revocación y recuperación, llegan en P3.3; la pantalla y la firma que informa, en P3.4. En Linux los conectores no corren hasta tener un encierro equivalente al de Windows: el binario y el ejecutor responden `UNSUPPORTED_PLATFORM`.
+**Estado.** P3.1 fijó el contrato y la receta. P3.2 agregó el trabajador encerrado `nemein-connector`, su empaquetado y el ejecutor de Node (`src/connector-runner.js`). P3.3 agrega el flujo:
+- instalación, habilitación y revocación por el propietario;
+- preparación, revisión y confirmación protegida del lote;
+- recuperación sin revivir habilitaciones.
+
+Todavía no hay pantalla: llega en P3.4, con la firma que informa. En Linux los conectores no corren hasta tener un encierro equivalente al de Windows: el binario y el ejecutor responden `UNSUPPORTED_PLATFORM`.
 
 ## Mundo WIT
 
@@ -171,6 +176,90 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
 - Tauri lo empaqueta como `externalBin`, junto a `nemein.exe`, y le pasa a Node su ruta en `NEMEIN_CONNECTOR_BIN`.
 - En Linux, el chequeo del shell usa un archivo de relleno: los conectores no corren ahí.
 
+## Flujo y administración (P3.3)
+
+El código está en `src/connectors.js`. El presupuesto le entrega sólo su dominio de importación: proyectar el lote con categorías y duplicados, insertar filas, y validar cuentas y categorías. Así, las reglas monetarias siguen en un solo lugar (`src/core.js`), y CSV, extractos y conectores comparten la misma inserción.
+
+### Dónde vive cada cosa
+
+| Qué | Dónde | Por qué |
+| --- | --- | --- |
+| Componente | `connectors/<sha256>/component.wasm`, en la carpeta de datos | Direccionado por contenido: el hash es la identidad. |
+| Inventario y habilitación | `connectors/inventory.json` | Fuera del SQLite: un respaldo restaurado no trae habilitaciones. |
+| Lote preparado | Tabla `connector_batches` (migración 007) | El lote y su resultado se confirman en la misma transacción que los movimientos. |
+| Instalar, habilitar y revocar | Auditoría (`agent_audit`), como acciones del propietario | La habilitación se ata a su fila de auditoría. |
+
+El inventario guarda, por conector:
+- el hash, el manifiesto que devolvió `describe` y el tamaño;
+- la fecha de instalación;
+- `enablement`: `null`, o un testigo aleatorio con la secuencia de su fila de auditoría.
+
+Un inventario que no cumple esa forma, porque el JSON está roto, tiene campos de más o de menos o repite un hash, falla cerrado con `CONNECTOR_INVENTORY_INVALID`. Así no se ejecuta ningún conector y no se sobrescribe el archivo.
+
+### Administración del propietario
+
+- **Instalar** recibe el componente en base64 canónico, de hasta 16 MiB. Ejecuta `describe` dentro del encierro, fuera de toda transacción, guarda el componente bajo su hash y lo deja **deshabilitado**. Reinstalar los mismos bytes es el mismo conector. Una versión nueva es otro hash y necesita su propia habilitación.
+- **Habilitar** comprueba que el componente en disco sigue teniendo el hash aprobado. Después escribe la fila de auditoría `connector-enable` con el hash y un testigo aleatorio, y por último guarda en el inventario el testigo y la secuencia de esa fila.
+- **Revocar** escribe primero el inventario, para que la revocación valga aunque falle la auditoría, y después la audita.
+
+Las tres operaciones exigen al propietario con la misma guarda que las conexiones (`OWNER_REQUIRED`). No están en la fachada del agente ni en la CLI, el MCP o la API local.
+
+**Una habilitación vale sólo si este historial la registró.** Tienen que cumplirse las cuatro condiciones:
+1. el inventario es de este presupuesto (la identidad de `event_identity`);
+2. existe la fila de auditoría de esa secuencia;
+3. esa fila es `connector-enable` del propietario, con ese hash y ese testigo;
+4. no hay una revocación posterior del mismo conector.
+
+### Acciones públicas
+
+| Acción | Tipo | Argumentos |
+| --- | --- | --- |
+| `connectors` | lectura | ninguno: hash, manifiesto, tamaño y si está habilitado o invalidado |
+| `connector-prepare` | asíncrona: sólo permitir o negar | `hash`, `account_id`, `content_base64`, `config` opcional y `category_id` opcional |
+| `connector-import` | escritura: permitir, preguntar o negar | `id`, `batch_sha256` |
+
+Como no admite una aprobación diferida, `connector-prepare` no acepta una regla de preguntar. Las reglas pueden limitar la cuenta de la preparación. `actionVersion` no cambia: las acciones nuevas empiezan negadas.
+
+### Preparar
+
+1. Se validan la cuenta, la configuración (16 KiB), el archivo en base64 canónico (5.000.000 bytes) y la categoría por defecto. No se acepta un base64 con relleno no canónico ni con caracteres de más.
+2. El conector tiene que estar habilitado, y su componente en disco tiene que tener el hash aprobado (si no, `CONNECTOR_ARTIFACT_CHANGED`). Esos mismos bytes son los que recibe el trabajador, junto con el manifiesto aprobado.
+3. El conector corre **fuera de toda transacción**. Si se revocó o cambió mientras corría, no se guarda nada.
+4. El lote se vuelve a validar (contrato v1 y cuenta), aunque el ejecutor ya lo hizo.
+5. **Las categorías que devuelve el conector se ignoran.** Un gasto toma la categoría de la memoria del presupuesto o la categoría por defecto que eligió el propietario, igual que en CSV. Sin ninguna de las dos, la preparación falla.
+6. Se guarda el lote con esas categorías fijas, el hash del componente, el del archivo, la configuración, la cuenta y el actor. Vence en 24 h.
+7. La respuesta incluye `id`, `batch_sha256`, el vencimiento, el conector y las filas con su marca de duplicado.
+
+Hay un tope de 4 lotes sin confirmar por actor y de 64 MiB entre todos (`CONNECTOR_BATCH_LIMIT`). Cada preparación borra los lotes vencidos y los confirmados hace más de 30 días.
+
+### Confirmar
+
+`connector-import` confirma **el lote guardado**, nunca filas que mande quien llama. Lo hace en una transacción corta, que vuelve a comprobar todo:
+- el lote existe y es del mismo actor (si no, `CONNECTOR_BATCH_UNKNOWN`, sin revelar si existe);
+- `batch_sha256` es el del lote revisado, y el lote guardado todavía tiene ese hash (si no, `CONNECTOR_BATCH_MISMATCH`);
+- no venció (`CONNECTOR_BATCH_EXPIRED`);
+- el conector sigue habilitado y su componente no cambió;
+- el contrato v1, la cuenta y cada categoría siguen siendo válidos. Las categorías no se recalculan desde una memoria que pudo cambiar.
+
+Los duplicados se omiten por `import_key`. El resultado `{added, duplicates}` se guarda en la misma transacción. Un reintento con el mismo hash devuelve ese resultado sin volver a importar, y el lote queda sin filas.
+
+Un agente con preguntar crea una propuesta. Al aceptarla, el propietario confirma el lote de ese agente. El agente no puede confirmar lotes del propietario, ni el propietario confirmar directamente los de un agente.
+
+El hash del conector **no entra en la identidad de los movimientos**: el `import_key` es el `entry_id` del lote. Una versión nueva del conector sobre el mismo extracto encuentra los mismos movimientos como duplicados.
+
+### Recuperación
+
+Los respaldos siguen siendo sólo el SQLite: no incluyen `connectors/`. Casos:
+- **Restaurar una copia anterior a la habilitación:** el inventario dice habilitado, pero esa fila de auditoría no existe o es otra. El conector queda deshabilitado y la lista lo muestra como invalidado.
+- **Restaurar una copia posterior a la habilitación:** es el mismo estado y la habilitación vale. Si después se revocó, la revocación está en el inventario y sigue vigente.
+- **Copiar `connectors/` junto a otro presupuesto:** la identidad no coincide y nada vale ahí. La primera operación del propietario rebinda el inventario a ese presupuesto y borra explícitamente esas habilitaciones.
+
+La recuperación soportada se hace en una carpeta nueva y vacía, sin copiar `connectors/`, y después se reinstalan los conectores, que quedan deshabilitados. Para recuperar sobre una carpeta existente hay que revocar primero sus conectores o borrar `connectors/inventory.json`. Ver [Respaldos](respaldos.md).
+
+### Ubicar el binario
+
+El ejecutor usa `NEMEIN_CONNECTOR_BIN`, que define el shell de escritorio. La CLI y el MCP instalados corren el `node.exe` de `<instalación>\runtime`, así que buscan `nemein-connector.exe` en la carpeta de instalación.
+
 ## Pruebas y calidad
 
 - Regresión: formato, límites exactos (20.000 movimientos, 160 caracteres, 10^12), fechas, comillas, codificación, contexto, configuración y archivos de oro.
@@ -179,6 +268,32 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
 - De punta a punta: la receta compila el ejemplo, el componente no tiene imports ni a nivel de componente ni en su núcleo, y wasmtime (`runtime`, `cranelift`, `component-model`, `std`, sin WASI ni `async`) lo ejecuta con un `Linker` vacío y devuelve exactamente el lote de oro.
 - Node: [connector-contract.test.js](../test/connector-contract.test.js) valida el lote de oro con `validateImportBatch`, recalcula las identidades desde el CSV y comprueba que el mundo no declara imports. Corre sin Rust en los jobs Linux y Windows existentes.
 - Mutación: `cargo-mutants` 27.1.0 sobre el SDK, el ejemplo y la herramienta (`.cargo/mutants.toml`). Cada mutante se juzga sólo con las pruebas de su propio paquete. `scripts/mutation-gate.js --cargo-mutants` aplica el mismo mínimo del 90 % y rechaza Timeout, Failure y una línea base fallida. Los mutantes que no compilan (Unviable) no miden nada y quedan fuera, como en el propio cargo-mutants. Pero si ningún mutante de un paquete se midió, el verificador rechaza la corrida: así quedaban fuera, en silencio, el SDK, el ejemplo y la herramienta cuando una opción de Cargo no aplicaba a esos paquetes. El plazo mínimo por mutante es de 300 s, porque la primera prueba de cada copia compila el componente; un timeout rechaza la medición.
+
+### Pruebas del flujo (P3.3)
+
+Las pruebas usan un sustituto del trabajador dentro del proceso (`test/helpers/connector-budget.js`), así que corren en cualquier sistema:
+- **Regresión** (`test/connectors.test.js`):
+  - instalación por hash, deshabilitada e idempotente;
+  - sólo el propietario administra;
+  - la preparación fuera de transacciones, con los bytes y el manifiesto aprobados;
+  - categorías del conector ignoradas y categorías revisadas fijas;
+  - confirmación única con reintentos;
+  - una confirmación distinta de lo revisado y un lote guardado alterado;
+  - un conector revocado, cambiado en disco o revocado mientras corre;
+  - el vencimiento exacto;
+  - una versión nueva que no duplica movimientos;
+  - los topes y la purga;
+  - agentes con permitir, preguntar y propuestas;
+  - recuperación desde copias anteriores y posteriores, y una carpeta copiada a otro presupuesto;
+  - un inventario dañado.
+- **Propiedades:**
+  - la habilitación contra un oráculo escrito aparte;
+  - el hash canónico del lote;
+  - base64 canónico;
+  - el inventario válido frente a cualquier campo dañado;
+  - la confirmación con duplicados al azar.
+- **Fuzzing:** un conector mentiroso con lotes editados al azar, argumentos de confirmación arbitrarios e inventarios dañados. El resultado tiene que ser un lote válido o un rechazo, nunca un error de tipo, y con un inventario dañado no corre ningún conector.
+- **Migración 007:** actualización desde el esquema 6 con datos, reversión ante una tabla en conflicto y reapertura.
 
 ### Pruebas del trabajador encerrado
 
