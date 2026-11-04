@@ -317,13 +317,29 @@ export function runConnector({
         ),
       );
     const [file, ...args] = [command].flat();
-    // Only SystemRoot: the supervisor needs nothing else from Node's
-    // environment, and a stderr nobody reads must not be able to block it.
-    // The supervisor is a GUI-subsystem binary, so it never opens a console.
-    const child = spawn(file, args, {
-      stdio: ["pipe", "pipe", "ignore"],
-      env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" },
-    });
+    // A missing binary is unavailable; anything else that stops it from
+    // starting is a supervisor failure. Node reports some of these by
+    // throwing, others through "error".
+    const notStarted = (cause) =>
+      fail(
+        cause.code === "ENOENT"
+          ? "CONNECTOR_UNAVAILABLE"
+          : "CONNECTOR_SUPERVISOR_FAILED",
+        "No se pudo iniciar el ejecutable de conectores.",
+        { cause },
+      );
+    let child;
+    try {
+      // Only SystemRoot: the supervisor needs nothing else from Node's
+      // environment, and a stderr nobody reads must not be able to block it.
+      // The supervisor is a GUI-subsystem binary: it never opens a console.
+      child = spawn(file, args, {
+        stdio: ["pipe", "pipe", "ignore"],
+        env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" },
+      });
+    } catch (cause) {
+      return reject(notStarted(cause));
+    }
     const reader = responseReader();
     // Promises settle once; the first outcome wins.
     const finish = (error, value) => {
@@ -341,17 +357,7 @@ export function runConnector({
         ),
       timeoutMs,
     );
-    child.on("error", (error) =>
-      finish(
-        fail(
-          error.code === "ENOENT"
-            ? "CONNECTOR_UNAVAILABLE"
-            : "CONNECTOR_SUPERVISOR_FAILED",
-          "No se pudo iniciar el ejecutable de conectores.",
-          { cause: error },
-        ),
-      ),
-    );
+    child.on("error", (cause) => finish(notStarted(cause)));
     child.stdout.on("data", (chunk) => {
       let frame;
       try {

@@ -41,9 +41,13 @@ const answer = () =>
 const hang = () => setInterval(() => {}, 1000);
 
 if (mode === "close-stdin") {
-  // Stops reading before the request arrives, and stays alive.
+  // Closes its end of stdin before the request arrives, and stays alive.
+  // Only POSIX: Node on Windows cannot close its own stdin pipe this way.
   closeSync(0);
   hang();
+} else if (mode === "exit-early") {
+  // Ends before reading anything.
+  process.exit(0);
 } else {
   let input = Buffer.alloc(0);
   let answered = false;

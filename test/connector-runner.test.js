@@ -634,19 +634,28 @@ processTest(
     );
     assert.ok(Date.now() - hang < 3000);
     assert.ok(await fakeGone(file), "hang");
-    // A supervisor that stops reading the request is stopped, not awaited.
+    // A supervisor that ends before reading a large request fails closed,
+    // whichever comes first: EPIPE on the request or its exit.
     await assert.rejects(
-      withFake("close-stdin", file, { component: Buffer.alloc(1 << 20) }),
-      (error) => {
-        assert.equal(
-          error.message,
-          "El supervisor de conectores no recibió la solicitud completa.",
-        );
-        assert.equal(typeof error.cause?.code, "string", String(error.cause));
-        return code("CONNECTOR_SUPERVISOR_FAILED")(error);
-      },
+      withFake("exit-early", file, { component: Buffer.alloc(1 << 20) }),
+      code("CONNECTOR_SUPERVISOR_FAILED"),
     );
-    assert.ok(await fakeGone(file), "close-stdin");
+    // One that stops reading but stays alive is stopped, not awaited. The
+    // fake can only close its own stdin on POSIX; the runner is the same code.
+    if (process.platform !== "win32") {
+      await assert.rejects(
+        withFake("close-stdin", file, { component: Buffer.alloc(1 << 20) }),
+        (error) => {
+          assert.equal(
+            error.message,
+            "El supervisor de conectores no recibió la solicitud completa.",
+          );
+          assert.equal(typeof error.cause?.code, "string", String(error.cause));
+          return code("CONNECTOR_SUPERVISOR_FAILED")(error);
+        },
+      );
+      assert.ok(await fakeGone(file), "close-stdin");
+    }
   },
 );
 
@@ -678,6 +687,19 @@ processTest("run: a supervisor that cannot start fails closed", async (t) => {
     (error) => {
       assert.equal(error.cause, undefined);
       return code("CONNECTOR_UNAVAILABLE")(error);
+    },
+  );
+  // Node throws for some spawn failures instead of emitting "error"; both
+  // fail closed the same way. A NUL in the path is refused by Node itself.
+  await assert.rejects(
+    runConnector({ ...request, command: "nemein\0connector", timeoutMs: 2000 }),
+    (error) => {
+      assert.equal(error.cause.code, "ERR_INVALID_ARG_VALUE");
+      assert.equal(
+        error.message,
+        "No se pudo iniciar el ejecutable de conectores.",
+      );
+      return code("CONNECTOR_SUPERVISOR_FAILED")(error);
     },
   );
   // Present but not runnable: a supervisor failure, not a missing one.
