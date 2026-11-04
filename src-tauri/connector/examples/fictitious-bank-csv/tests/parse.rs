@@ -220,6 +220,11 @@ fn dates() {
         "2026-10-00",
         "2026-1-01",
         "2026/10/01",
+        // Only one separator wrong: each position is checked on its own.
+        "2026-10/01",
+        "2026/10-01",
+        "2026-10001",
+        "2026010-01",
         "26-10-01",
         "2026-10-01 ",
         " 2026-10-01",
@@ -415,6 +420,23 @@ fn configuration() {
 fn too_many_fields_fail_before_reading_the_rest() {
     let line = ";".repeat(1_000_000);
     assert_eq!(code(&rows(&[&line])), FORMAT);
+}
+
+#[test]
+fn guest_exports_call_the_same_parser() {
+    // What the component exports, called natively: same batch, same errors.
+    let input = include_bytes!("../fixtures/extracto.csv").to_vec();
+    let context = ctx("", "1");
+    let exported =
+        <Connector as nemein_connector_sdk::Guest>::parse(input.clone(), context.clone());
+    assert_eq!(exported, parse(&input, &context));
+    assert_eq!(
+        format!("{}\n", exported.unwrap()),
+        include_str!("../fixtures/extracto.batch.json")
+    );
+    let failure =
+        <Connector as nemein_connector_sdk::Guest>::parse(b"x".to_vec(), context).unwrap_err();
+    assert_eq!(failure.code, FORMAT);
 }
 
 #[test]
