@@ -11,7 +11,9 @@ import {
   sha256,
   validateInventory,
 } from "../../src/connectors.js";
+import { generateKeyPairSync } from "node:crypto";
 import { LIMITS } from "../../src/connector-runner.js";
+import { signComponent } from "../../src/connector-signature.js";
 import { openBudget } from "../../src/core.js";
 import {
   base64,
@@ -161,6 +163,10 @@ test("PBT: base64 decodes exactly the canonical encoding within the limit", () =
 });
 
 test("PBT: a valid inventory is accepted and any one damaged field fails closed", () => {
+  const signatureFile = signComponent(
+    "c".repeat(64),
+    generateKeyPairSync("ed25519").privateKey,
+  );
   // The bounds themselves are valid, and generated often.
   const entry = fc.record({
     hash: hex,
@@ -170,6 +176,8 @@ test("PBT: a valid inventory is accepted and any one damaged field fails closed"
       fc.integer({ min: 1, max: LIMITS.component }),
     ),
     installed_at: fc.constant("2026-11-04T12:00:00.000Z"),
+    // Absent before signatures, or null, or a well-formed file.
+    signature: fc.constantFrom(undefined, null, signatureFile),
     enablement: fc.option(
       fc.record({
         token: hex,
@@ -180,6 +188,8 @@ test("PBT: a valid inventory is accepted and any one damaged field fails closed"
     ),
   });
   const damage = [
+    (e) => ({ ...e, signature: { ...signatureFile, version: 2 } }),
+    (e) => ({ ...e, signature: JSON.stringify(signatureFile) + "x" }),
     (e) => ({ ...e, hash: e.hash.toUpperCase() + "g" }),
     (e) => ({ ...e, hash: "x" + e.hash }),
     (e) => ({ ...e, hash: e.hash + "0" }),
@@ -282,7 +292,7 @@ test("PBT: confirming adds exactly the entries not yet imported, once", async ()
           const { hash } = await b.installConnector({
             component_base64: base64("componente"),
           });
-          b.enableConnector({ hash });
+          b.enableConnector({ acknowledge_unsigned: true, hash });
           const prepared = await b.prepareConnectorImport({
             hash,
             account_id: account,

@@ -45,7 +45,7 @@ export async function importThroughConnector(budget, accountId, extra = {}) {
   const installed = await budget.installConnector({
     component_base64: base64(extra.component ?? component),
   });
-  budget.enableConnector({ hash: installed.hash });
+  budget.enableConnector({ acknowledge_unsigned: true, hash: installed.hash });
   const prepared = await budget.prepareConnectorImport({
     hash: installed.hash,
     account_id: accountId,

@@ -513,6 +513,8 @@ export function openBudget(dir = defaultDir(), options = {}) {
         cfg,
       ).rows,
     insert: insertImported,
+    imported: (key) =>
+      !!one("SELECT id FROM transactions WHERE import_key=?", key),
     account,
     category,
   };

@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { checkSignature, parseSignature } from "./connector-signature.js";
 import { LIMITS, runConnector, validateManifest } from "./connector-runner.js";
 import { validateImportBatch } from "./import-contract.js";
 
@@ -101,6 +102,9 @@ export function validateInventory(inventory) {
     seen.add(entry.hash);
     try {
       validateManifest(entry.manifest);
+      // Absent in inventories written before signatures (P3.3).
+      if (entry.signature !== undefined && entry.signature !== null)
+        parseSignature(entry.signature);
     } catch {
       throw invalid();
     }
@@ -239,6 +243,7 @@ export function connectorStore(dir, db) {
       manifest: entry.manifest,
       size: entry.size,
       installed_at: entry.installed_at,
+      signature: checkSignature(entry.hash, entry.signature),
       enabled,
       // Recorded as enabled, but not by this budget's current history.
       invalidated: !!entry.enablement && !enabled,
@@ -254,21 +259,31 @@ export function connectorStore(dir, db) {
     usable,
     artifact,
     // Stores the component under its hash and lists it disabled. Installing
-    // the same bytes again rewrites them: that repairs a changed artifact.
-    install(bytes, manifest, now) {
+    // the same bytes again rewrites them: that repairs a changed artifact. A
+    // signature given with them replaces the stored one; it never touches the
+    // enablement, which belongs to the bytes.
+    install(bytes, manifest, now, signature = null) {
       const hash = sha256(bytes);
       const inventory = read();
       const known = inventory.connectors.find((c) => c.hash === hash);
       write(artifactFile(hash), bytes);
-      if (known) return summary(inventory, known);
-      const entry = {
-        hash,
-        manifest: validateManifest(manifest),
-        size: bytes.length,
-        installed_at: now.toISOString(),
-        enablement: null,
-      };
-      save({ ...inventory, connectors: [...inventory.connectors, entry] });
+      if (known && !signature) return summary(inventory, known);
+      const entry = known
+        ? { ...known, signature }
+        : {
+            hash,
+            manifest: validateManifest(manifest),
+            size: bytes.length,
+            installed_at: now.toISOString(),
+            signature,
+            enablement: null,
+          };
+      save({
+        ...inventory,
+        connectors: known
+          ? inventory.connectors.map((c) => (c.hash === hash ? entry : c))
+          : [...inventory.connectors, entry],
+      });
       return summary(read(), entry);
     },
     newToken: () => randomBytes(32).toString("hex"),
@@ -298,7 +313,8 @@ export function connectorStore(dir, db) {
 
 // Prepare and confirm, attached to the budget. `domain` is the budget's import
 // domain: project(batch, cfg) fixes categories and duplicates; insert(account,
-// rows) writes; account(id) and category(id) validate.
+// rows) writes; imported(key) tells a duplicate; account(id) and category(id)
+// validate.
 export function connectorImports(budget, domain, options = {}) {
   const db = budget.db;
   const store = connectorStore(budget.dir, db);
@@ -307,6 +323,8 @@ export function connectorImports(budget, domain, options = {}) {
   // access.js names the actor: the owner, or the agent's connection.
   const actor = () => budget.reviewAuthor();
   const one = (sql, ...args) => db.prepare(sql).get(...args);
+  const unknownBatch = () =>
+    fail("CONNECTOR_BATCH_UNKNOWN", "El lote no existe o no es tuyo.");
   const purge = (at) => {
     db.prepare(
       "DELETE FROM connector_batches WHERE confirmed_at IS NULL AND expires_at<=?",
@@ -413,16 +431,14 @@ export function connectorImports(budget, domain, options = {}) {
   // bytes, the batch contract, the account, categories and duplicates are all
   // checked again. A retry returns the stored result.
   function confirmConnectorImport(p = {}) {
-    const unknown = () =>
-      fail("CONNECTOR_BATCH_UNKNOWN", "El lote no existe o no es tuyo.");
-    if (typeof p.id !== "string") throw unknown();
+    if (typeof p.id !== "string") throw unknownBatch();
     if (!isHash(p.batch_sha256))
       throw fail(
         "CONNECTOR_REQUEST_INVALID",
         "Falta el hash del lote revisado.",
       );
     const row = one("SELECT * FROM connector_batches WHERE id=?", p.id);
-    if (!row || row.actor !== actor()) throw unknown();
+    if (!row || row.actor !== actor()) throw unknownBatch();
     if (row.batch_hash !== p.batch_sha256)
       throw fail(
         "CONNECTOR_BATCH_MISMATCH",
@@ -461,6 +477,38 @@ export function connectorImports(budget, domain, options = {}) {
     return result;
   }
 
+  // The stored batch as the screen shows it, only to the actor that prepared
+  // it: the rows to import, each marked when the budget already has it, or
+  // the result of its confirmation. Reading runs nothing.
+  function connectorBatch(p = {}) {
+    const row =
+      typeof p.id === "string"
+        ? one("SELECT * FROM connector_batches WHERE id=?", p.id)
+        : undefined;
+    if (!row || row.actor !== actor()) throw unknownBatch();
+    const base = {
+      id: row.id,
+      batch_sha256: row.batch_hash,
+      expires_at: row.expires_at,
+      account_id: row.account_id,
+      connector: row.component_hash,
+    };
+    if (row.confirmed_at)
+      return { ...base, confirmed: true, result: JSON.parse(row.result) };
+    return {
+      ...base,
+      confirmed: false,
+      rows: JSON.parse(row.batch).entries.map((e) => ({
+        date: e.date,
+        payee: e.payee,
+        amount: e.amount,
+        category_id: e.category_id,
+        import_key: e.id,
+        duplicate: domain.imported(e.id),
+      })),
+    };
+  }
+
   // Owner operations, unguarded here: access.js wraps them with the owner
   // guard and audits them.
   async function installConnector(p = {}) {
@@ -469,20 +517,36 @@ export function connectorImports(budget, domain, options = {}) {
       LIMITS.component,
       "El componente",
     );
+    const signature =
+      p.signature === undefined || p.signature === null
+        ? null
+        : parseSignature(p.signature);
     // describe runs the connector's code too: enclosed, outside transactions.
     const { manifest } = await run({
       op: "describe",
       component: bytes,
       accountId: "1",
     });
-    return store.install(bytes, manifest, now());
+    return store.install(bytes, manifest, now(), signature);
   }
   // `record(args)` audits the enablement and returns its audit sequence.
+  // Without a valid signature the owner acknowledges it explicitly.
   function enableConnector(p = {}, record) {
     const { entry } = store.find(p.hash);
     store.artifact(entry);
+    const signature = checkSignature(entry.hash, entry.signature).status;
+    if (signature !== "valid" && p.acknowledge_unsigned !== true)
+      throw fail(
+        "CONNECTOR_SIGNATURE_UNACKNOWLEDGED",
+        "El conector no tiene una firma válida. Para habilitarlo igual, confirmá que lo aceptás sin firma.",
+      );
     const token = store.newToken();
-    store.enable(entry.hash, token, record({ hash: entry.hash, token }), now());
+    store.enable(
+      entry.hash,
+      token,
+      record({ hash: entry.hash, token, signature }),
+      now(),
+    );
     return { hash: entry.hash, enabled: true };
   }
   function revokeConnector(p = {}) {
@@ -497,6 +561,7 @@ export function connectorImports(budget, domain, options = {}) {
       listConnectors: () => store.list(),
       prepareConnectorImport,
       confirmConnectorImport,
+      connectorBatch,
       installConnector,
       enableConnector,
       revokeConnector,

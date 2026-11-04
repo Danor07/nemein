@@ -109,7 +109,7 @@ test("fuzz: a lying connector's batches are stored valid or refused", async (t) 
   const { hash } = await b.installConnector({
     component_base64: base64("componente"),
   });
-  b.enableConnector({ hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash });
   await fc.assert(
     fc.asyncProperty(fc.array(edit, { maxLength: 3 }), async (edits) => {
       state.edits = edits;
@@ -142,7 +142,7 @@ test("fuzz: arbitrary confirmation arguments are refused with a code", async (t)
   const { hash } = await b.installConnector({
     component_base64: base64("componente"),
   });
-  b.enableConnector({ hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash });
   const prepared = await b.prepareConnectorImport({
     hash,
     account_id: account,
@@ -185,7 +185,7 @@ test("fuzz: a damaged inventory never runs a connector and never crashes", async
   const { hash } = await b.installConnector({
     component_base64: base64("componente"),
   });
-  b.enableConnector({ hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash });
   const file = path.join(dir, "connectors", "inventory.json");
   await fc.assert(
     fc.asyncProperty(fc.oneof(fc.jsonValue(), fc.string()), async (value) => {

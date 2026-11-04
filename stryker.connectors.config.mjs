@@ -8,8 +8,10 @@ export default {
   mutate: [
     "src/connectors.js",
     "src/core.js:335-355",
-    "src/core.js:505-519",
-    "src/access.js:784-826",
+    "src/core.js:505-521",
+    "src/access.js:24-30",
+    "src/access.js:61-61",
+    "src/access.js:791-837",
   ],
   commandRunner: {
     command:
