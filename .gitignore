@@ -3,6 +3,8 @@ data/
 desktop-resources/
 src-tauri/target/
 src-tauri/connector/target/
+# Built by scripts/prepare-connector.js for Tauri's externalBin.
+src-tauri/binaries/
 src-tauri/gen/
 *.log
 .preview-data/

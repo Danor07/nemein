@@ -1,0 +1,663 @@
+//! The Windows enclosure of the worker process.
+//!
+//! The worker starts suspended in a less-privileged AppContainer (LPAC) with no
+//! capabilities, inside a Job object, and only then runs:
+//!
+//! - **Token**: AppContainer SID derived from `Nemein.ConnectorWorker`, with no
+//!   profile (so no writable folder) and no capabilities, opted out of
+//!   `ALL APPLICATION PACKAGES` (LPAC): only objects that name this SID, or
+//!   `ALL RESTRICTED APPLICATION PACKAGES` like System32, are reachable. The
+//!   supervisor grants read and execute on the worker binary and its folder,
+//!   nothing else; never on the budget's data folder.
+//! - **Handles**: exactly two anonymous pipes are inherited (`HANDLE_LIST`),
+//!   with an environment block that only carries `SystemRoot`.
+//! - **Job**: `KILL_ON_JOB_CLOSE`, one active process, a committed memory
+//!   limit and death on unhandled exceptions. UI restrictions are added when
+//!   the worker is in no other job; jobs with UI limits cannot nest, and under
+//!   the desktop app the worker already is in Nemein's job, so Win32k lockdown
+//!   covers the UI there. The supervisor holds the only handle, so if the
+//!   supervisor dies for any reason, the worker dies with it.
+//! - **Process policy**: no child processes, plus Chromium's pre-start
+//!   mitigations that are compatible with a JIT (dynamic code must stay
+//!   allowed for Cranelift). Requires Windows 10 1809 or later.
+//!
+//! Nothing here falls back: if any step fails, the connector does not run.
+
+use crate::supervise::{Ending, Worker};
+use std::ffi::{c_void, OsStr};
+use std::fs::File;
+use std::io::{Read, Write};
+use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::FromRawHandle;
+use std::path::Path;
+use std::ptr::{null, null_mut};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GetLastError, LocalFree, SetHandleInformation, ERROR_SUCCESS, FALSE, HANDLE,
+    HANDLE_FLAG_INHERIT, INVALID_HANDLE_VALUE, TRUE,
+};
+use windows_sys::Win32::Security::Authorization::{
+    GetEffectiveRightsFromAclW, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
+    EXPLICIT_ACCESS_W, GRANT_ACCESS, NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, TRUSTEE_IS_SID,
+    TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+};
+use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
+use windows_sys::Win32::Security::{
+    FreeSid, GetTokenInformation, TokenIsAppContainer, ACL, DACL_SECURITY_INFORMATION,
+    NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, SECURITY_CAPABILITIES,
+    TOKEN_QUERY,
+};
+use windows_sys::Win32::Storage::FileSystem::{FILE_GENERIC_EXECUTE, FILE_GENERIC_READ};
+use windows_sys::Win32::System::JobObjects::{
+    AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob,
+    JobObjectAssociateCompletionPortInformation, JobObjectBasicUIRestrictions,
+    JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
+    TerminateJobObject, JOBOBJECT_ASSOCIATE_COMPLETION_PORT, JOBOBJECT_BASIC_UI_RESTRICTIONS,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
+    JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION, JOB_OBJECT_LIMIT_JOB_MEMORY,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_UILIMIT_DESKTOP,
+    JOB_OBJECT_UILIMIT_DISPLAYSETTINGS, JOB_OBJECT_UILIMIT_EXITWINDOWS,
+    JOB_OBJECT_UILIMIT_GLOBALATOMS, JOB_OBJECT_UILIMIT_HANDLES, JOB_OBJECT_UILIMIT_READCLIPBOARD,
+    JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS, JOB_OBJECT_UILIMIT_WRITECLIPBOARD,
+};
+use windows_sys::Win32::System::Pipes::CreatePipe;
+use windows_sys::Win32::System::SystemServices::{
+    JOB_OBJECT_MSG_JOB_MEMORY_LIMIT, JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
+};
+use windows_sys::Win32::System::Threading::{
+    CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
+    InitializeProcThreadAttributeList, OpenProcessToken, ResumeThread, TerminateProcess,
+    UpdateProcThreadAttribute, WaitForSingleObject, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
+    DETACHED_PROCESS, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
+    PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY,
+    PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+    PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+    STARTF_USESTDHANDLES, STARTUPINFOEXW,
+};
+use windows_sys::Win32::System::WindowsProgramming::{
+    PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT, PROCESS_CREATION_CHILD_PROCESS_RESTRICTED,
+};
+use windows_sys::Win32::System::IO::{
+    CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED,
+};
+
+/// The AppContainer every worker runs in. Its SID is derived from this name;
+/// no profile is registered, so the worker has no folder of its own.
+pub const APPCONTAINER_NAME: &str = "Nemein.ConnectorWorker";
+
+// winbase.h macros that windows-sys does not carry. Each policy is a 4-bit
+// field and 1 means "always on".
+const MITIGATION_HEAP_TERMINATE: u64 = 1 << 12;
+const MITIGATION_BOTTOM_UP_ASLR: u64 = 1 << 16;
+const MITIGATION_HIGH_ENTROPY_ASLR: u64 = 1 << 20;
+const MITIGATION_WIN32K_SYSTEM_CALL_DISABLE: u64 = 1 << 28;
+const MITIGATION_EXTENSION_POINT_DISABLE: u64 = 1 << 32;
+const MITIGATION_FONT_DISABLE: u64 = 1 << 48;
+const MITIGATION_IMAGE_LOAD_NO_REMOTE: u64 = 1 << 52;
+const MITIGATION_IMAGE_LOAD_NO_LOW_LABEL: u64 = 1 << 56;
+const MITIGATION_IMAGE_LOAD_PREFER_SYSTEM32: u64 = 1 << 60;
+
+/// Mitigations set before the worker starts, Chromium's JIT-compatible set.
+/// Dynamic code stays allowed: Cranelift writes machine code at run time.
+/// Strict handle checks are left out: Chromium applies them only after start.
+pub const MITIGATIONS: u64 = MITIGATION_HEAP_TERMINATE
+    | MITIGATION_BOTTOM_UP_ASLR
+    | MITIGATION_HIGH_ENTROPY_ASLR
+    | MITIGATION_WIN32K_SYSTEM_CALL_DISABLE
+    | MITIGATION_EXTENSION_POINT_DISABLE
+    | MITIGATION_FONT_DISABLE
+    | MITIGATION_IMAGE_LOAD_NO_REMOTE
+    | MITIGATION_IMAGE_LOAD_NO_LOW_LABEL
+    | MITIGATION_IMAGE_LOAD_PREFER_SYSTEM32;
+
+/// UI restrictions, as Chromium applies them to its sandboxed processes.
+const UI_RESTRICTIONS: u32 = JOB_OBJECT_UILIMIT_DESKTOP
+    | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS
+    | JOB_OBJECT_UILIMIT_EXITWINDOWS
+    | JOB_OBJECT_UILIMIT_GLOBALATOMS
+    | JOB_OBJECT_UILIMIT_HANDLES
+    | JOB_OBJECT_UILIMIT_READCLIPBOARD
+    | JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS
+    | JOB_OBJECT_UILIMIT_WRITECLIPBOARD;
+
+/// Read and execute: what loading the binary and listing its folder need.
+const GRANTED: u32 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE;
+
+fn wide(text: impl AsRef<OsStr>) -> Vec<u16> {
+    text.as_ref().encode_wide().chain(Some(0)).collect()
+}
+
+fn last_error(step: &str) -> String {
+    format!("{step}: error {}", unsafe { GetLastError() })
+}
+
+/// A handle closed on drop.
+struct Owned(HANDLE);
+
+// Kernel handles may be used and closed from any thread.
+unsafe impl Send for Owned {}
+
+impl Owned {
+    /// Gives up ownership without closing.
+    fn into_raw(self) -> HANDLE {
+        let handle = self.0;
+        std::mem::forget(self);
+        handle
+    }
+}
+
+impl Drop for Owned {
+    fn drop(&mut self) {
+        if !self.0.is_null() && self.0 != INVALID_HANDLE_VALUE {
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+}
+
+/// The AppContainer SID, freed on drop.
+pub struct ContainerSid(PSID);
+
+unsafe impl Send for ContainerSid {}
+
+impl Drop for ContainerSid {
+    fn drop(&mut self) {
+        unsafe { FreeSid(self.0) };
+    }
+}
+
+impl ContainerSid {
+    pub fn as_psid(&self) -> PSID {
+        self.0
+    }
+}
+
+/// Derives the SID from the name; nothing is registered on the system.
+pub fn container_sid() -> Result<ContainerSid, String> {
+    let name = wide(APPCONTAINER_NAME);
+    let mut sid: PSID = null_mut();
+    let result = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid) };
+    if result < 0 || sid.is_null() {
+        return Err(format!(
+            "no se pudo obtener el AppContainer: 0x{:08x}",
+            result as u32
+        ));
+    }
+    Ok(ContainerSid(sid))
+}
+
+fn trustee(sid: &ContainerSid) -> TRUSTEE_W {
+    TRUSTEE_W {
+        pMultipleTrustee: null_mut(),
+        MultipleTrusteeOperation: NO_MULTIPLE_TRUSTEE,
+        TrusteeForm: TRUSTEE_IS_SID,
+        TrusteeType: TRUSTEE_IS_UNKNOWN,
+        ptstrName: sid.as_psid() as *mut u16,
+    }
+}
+
+/// The rights `sid` already has on `path` through its DACL.
+pub fn effective_rights(path: &Path, sid: &ContainerSid) -> Result<u32, String> {
+    let name = wide(path);
+    let mut dacl: *mut ACL = null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
+    let status = unsafe {
+        GetNamedSecurityInfoW(
+            name.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            null_mut(),
+            null_mut(),
+            &mut dacl,
+            null_mut(),
+            &mut descriptor,
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(format!(
+            "no se pudo leer los permisos de {}: {status}",
+            path.display()
+        ));
+    }
+    let mut rights = 0u32;
+    let trustee = trustee(sid);
+    let status = unsafe { GetEffectiveRightsFromAclW(dacl, &trustee, &mut rights) };
+    unsafe { LocalFree(descriptor) };
+    if status != ERROR_SUCCESS {
+        return Err(format!(
+            "no se pudo evaluar los permisos de {}: {status}",
+            path.display()
+        ));
+    }
+    Ok(rights)
+}
+
+/// Grants read and execute on exactly `path` to `sid`, not inherited by its
+/// children. Does nothing when the right is already there.
+pub fn grant(path: &Path, sid: &ContainerSid) -> Result<(), String> {
+    if effective_rights(path, sid)? & GRANTED == GRANTED {
+        return Ok(());
+    }
+    let name = wide(path);
+    let mut dacl: *mut ACL = null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = null_mut();
+    let status = unsafe {
+        GetNamedSecurityInfoW(
+            name.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            null_mut(),
+            null_mut(),
+            &mut dacl,
+            null_mut(),
+            &mut descriptor,
+        )
+    };
+    if status != ERROR_SUCCESS {
+        return Err(format!(
+            "no se pudo leer los permisos de {}: {status}",
+            path.display()
+        ));
+    }
+    let entry = EXPLICIT_ACCESS_W {
+        grfAccessPermissions: GRANTED,
+        grfAccessMode: GRANT_ACCESS,
+        grfInheritance: NO_INHERITANCE,
+        Trustee: trustee(sid),
+    };
+    let mut updated: *mut ACL = null_mut();
+    let status = unsafe { SetEntriesInAclW(1, &entry, dacl, &mut updated) };
+    let result = if status != ERROR_SUCCESS {
+        Err(format!(
+            "no se pudo preparar el permiso de {}: {status}",
+            path.display()
+        ))
+    } else {
+        let status = unsafe {
+            SetNamedSecurityInfoW(
+                name.as_ptr(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                null_mut(),
+                null_mut(),
+                updated,
+                null(),
+            )
+        };
+        if status == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(format!(
+                "no se pudo otorgar el permiso en {}: {status}",
+                path.display()
+            ))
+        }
+    };
+    unsafe {
+        LocalFree(updated as *mut c_void);
+        LocalFree(descriptor);
+    }
+    result
+}
+
+/// A worker running inside the enclosure.
+pub struct Enclosed {
+    job: Owned,
+    process: Owned,
+    port: Owned,
+    memory: usize,
+    ui_restricted: bool,
+    stdin: Option<File>,
+    stdout: Option<File>,
+}
+
+impl Enclosed {
+    /// Whether the job carries UI restrictions (it does unless nested).
+    pub fn ui_restricted(&self) -> bool {
+        self.ui_restricted
+    }
+
+    fn peak_memory(&self) -> usize {
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        let read = unsafe {
+            QueryInformationJobObject(
+                self.job.0,
+                JobObjectExtendedLimitInformation,
+                &mut info as *mut _ as _,
+                size_of_val(&info) as u32,
+                null_mut(),
+            )
+        };
+        if read == FALSE {
+            0
+        } else {
+            info.PeakJobMemoryUsed
+        }
+    }
+}
+
+impl Worker for Enclosed {
+    fn take_stdin(&mut self) -> Box<dyn Write + Send> {
+        Box::new(self.stdin.take().expect("stdin taken once"))
+    }
+
+    fn take_stdout(&mut self) -> Box<dyn Read + Send> {
+        Box::new(self.stdout.take().expect("stdout taken once"))
+    }
+
+    fn kill(&mut self) {
+        unsafe {
+            TerminateJobObject(self.job.0, 1);
+            WaitForSingleObject(self.process.0, 5_000);
+        }
+    }
+
+    fn ending(&mut self) -> Ending {
+        // The job posts a message when a process tries to commit past the
+        // limit, but delivery is only guaranteed for notification limits, so
+        // the peak commit corroborates it.
+        loop {
+            let (mut message, mut key, mut overlapped) = (0u32, 0usize, null_mut::<OVERLAPPED>());
+            let got = unsafe {
+                GetQueuedCompletionStatus(self.port.0, &mut message, &mut key, &mut overlapped, 0)
+            };
+            if got == FALSE {
+                break;
+            }
+            if message == JOB_OBJECT_MSG_JOB_MEMORY_LIMIT
+                || message == JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT
+            {
+                return Ending::MemoryLimit;
+            }
+        }
+        if self.peak_memory() >= self.memory / 10 * 9 {
+            Ending::MemoryLimit
+        } else {
+            Ending::Other
+        }
+    }
+}
+
+impl Drop for Enclosed {
+    fn drop(&mut self) {
+        // Closing the last job handle kills the worker anyway; be explicit.
+        unsafe { TerminateJobObject(self.job.0, 1) };
+    }
+}
+
+fn job(memory: usize) -> Result<(Owned, Owned), String> {
+    let job = Owned(unsafe { CreateJobObjectW(null(), null()) });
+    if job.0.is_null() {
+        return Err(last_error("CreateJobObjectW"));
+    }
+    let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+        | JOB_OBJECT_LIMIT_JOB_MEMORY
+        | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
+    limits.BasicLimitInformation.ActiveProcessLimit = 1;
+    limits.JobMemoryLimit = memory;
+    let port = Owned(unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, null_mut(), 0, 1) });
+    if port.0.is_null() {
+        return Err(last_error("CreateIoCompletionPort"));
+    }
+    let association = JOBOBJECT_ASSOCIATE_COMPLETION_PORT {
+        CompletionKey: null_mut(),
+        CompletionPort: port.0,
+    };
+    let set = |class, info: *const c_void, size: usize| unsafe {
+        SetInformationJobObject(job.0, class, info, size as u32) != 0
+    };
+    if !set(
+        JobObjectExtendedLimitInformation,
+        &limits as *const _ as _,
+        size_of_val(&limits),
+    ) || !set(
+        JobObjectAssociateCompletionPortInformation,
+        &association as *const _ as _,
+        size_of_val(&association),
+    ) {
+        return Err(last_error("SetInformationJobObject"));
+    }
+    Ok((job, port))
+}
+
+/// Adds UI restrictions unless `process` is already in another job: jobs with
+/// UI limits cannot nest. Returns whether they were added.
+fn restrict_ui(job: &Owned, process: &Owned) -> Result<bool, String> {
+    let mut nested = FALSE;
+    if unsafe { IsProcessInJob(process.0, null_mut(), &mut nested) } == FALSE {
+        return Err(last_error("IsProcessInJob"));
+    }
+    if nested != FALSE {
+        return Ok(false);
+    }
+    let ui = JOBOBJECT_BASIC_UI_RESTRICTIONS {
+        UIRestrictionsClass: UI_RESTRICTIONS,
+    };
+    let set = unsafe {
+        SetInformationJobObject(
+            job.0,
+            JobObjectBasicUIRestrictions,
+            &ui as *const _ as _,
+            size_of_val(&ui) as u32,
+        )
+    };
+    if set == FALSE {
+        return Err(last_error("SetInformationJobObject(UI)"));
+    }
+    Ok(true)
+}
+
+/// Two pipes: (child stdin read, parent stdin write), (parent stdout read,
+/// child stdout write). Only the child's ends are inheritable.
+fn pipes() -> Result<[Owned; 4], String> {
+    let attributes = SECURITY_ATTRIBUTES {
+        nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+        lpSecurityDescriptor: null_mut(),
+        bInheritHandle: TRUE,
+    };
+    let (mut child_in, mut parent_in, mut parent_out, mut child_out) =
+        (null_mut(), null_mut(), null_mut(), null_mut());
+    unsafe {
+        if CreatePipe(&mut child_in, &mut parent_in, &attributes, 0) == FALSE {
+            return Err(last_error("CreatePipe"));
+        }
+        let pair = [Owned(child_in), Owned(parent_in)];
+        if CreatePipe(&mut parent_out, &mut child_out, &attributes, 0) == FALSE {
+            return Err(last_error("CreatePipe"));
+        }
+        let [child_in, parent_in] = pair;
+        let (parent_out, child_out) = (Owned(parent_out), Owned(child_out));
+        if SetHandleInformation(parent_in.0, HANDLE_FLAG_INHERIT, 0) == FALSE
+            || SetHandleInformation(parent_out.0, HANDLE_FLAG_INHERIT, 0) == FALSE
+        {
+            return Err(last_error("SetHandleInformation"));
+        }
+        Ok([child_in, parent_in, parent_out, child_out])
+    }
+}
+
+/// Environment of the worker: only what system DLLs may need.
+fn environment() -> Vec<u16> {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+    let mut block: Vec<u16> = OsStr::new("SystemRoot=").encode_wide().collect();
+    block.extend(root.encode_wide());
+    block.extend([0, 0]);
+    block
+}
+
+/// Starts `program args` enclosed, with `memory` bytes of committed memory.
+pub fn spawn(program: &Path, args: &[&str], memory: usize) -> Result<Box<dyn Worker>, String> {
+    let program =
+        std::fs::canonicalize(program).map_err(|e| format!("{}: {e}", program.display()))?;
+    let folder = program
+        .parent()
+        .ok_or("el binario no tiene carpeta")?
+        .to_path_buf();
+    let sid = container_sid()?;
+    grant(&folder, &sid)?;
+    grant(&program, &sid)?;
+    let (job, port) = job(memory)?;
+    let [child_in, parent_in, parent_out, child_out] = pipes()?;
+
+    let mut size = 0usize;
+    unsafe { InitializeProcThreadAttributeList(null_mut(), 5, 0, &mut size) };
+    let mut storage = vec![0u8; size];
+    let list = storage.as_mut_ptr() as LPPROC_THREAD_ATTRIBUTE_LIST;
+    if unsafe { InitializeProcThreadAttributeList(list, 5, 0, &mut size) } == FALSE {
+        return Err(last_error("InitializeProcThreadAttributeList"));
+    }
+    struct List(LPPROC_THREAD_ATTRIBUTE_LIST);
+    impl Drop for List {
+        fn drop(&mut self) {
+            unsafe { DeleteProcThreadAttributeList(self.0) };
+        }
+    }
+    let list = List(list);
+    let capabilities = SECURITY_CAPABILITIES {
+        AppContainerSid: sid.as_psid(),
+        Capabilities: null_mut(),
+        CapabilityCount: 0,
+        Reserved: 0,
+    };
+    let lpac: u32 = PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
+    let inherited: [HANDLE; 2] = [child_in.0, child_out.0];
+    let children: u32 = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
+    let mitigations: u64 = MITIGATIONS;
+    let attributes: [(usize, *const c_void, usize); 5] = [
+        (
+            PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES as usize,
+            &capabilities as *const _ as _,
+            size_of_val(&capabilities),
+        ),
+        (
+            PROC_THREAD_ATTRIBUTE_ALL_APPLICATION_PACKAGES_POLICY as usize,
+            &lpac as *const _ as _,
+            size_of_val(&lpac),
+        ),
+        (
+            PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+            inherited.as_ptr() as _,
+            size_of_val(&inherited),
+        ),
+        (
+            PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY as usize,
+            &children as *const _ as _,
+            size_of_val(&children),
+        ),
+        (
+            PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY as usize,
+            &mitigations as *const _ as _,
+            size_of_val(&mitigations),
+        ),
+    ];
+    for (attribute, value, size) in attributes {
+        if unsafe {
+            UpdateProcThreadAttribute(list.0, 0, attribute, value, size, null_mut(), null())
+        } == FALSE
+        {
+            return Err(last_error("UpdateProcThreadAttribute"));
+        }
+    }
+
+    let mut startup: STARTUPINFOEXW = unsafe { std::mem::zeroed() };
+    startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
+    startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startup.StartupInfo.hStdInput = child_in.0;
+    startup.StartupInfo.hStdOutput = child_out.0;
+    startup.StartupInfo.hStdError = null_mut();
+    startup.lpAttributeList = list.0;
+    let application = wide(&program);
+    let mut command_line: Vec<u16> = wide(format!("\"{}\" {}", program.display(), args.join(" ")));
+    let directory = wide(&folder);
+    let environment = environment();
+    let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+    let created = unsafe {
+        CreateProcessW(
+            application.as_ptr(),
+            command_line.as_mut_ptr(),
+            null(),
+            null(),
+            TRUE,
+            EXTENDED_STARTUPINFO_PRESENT
+                | CREATE_SUSPENDED
+                | DETACHED_PROCESS
+                | CREATE_UNICODE_ENVIRONMENT,
+            environment.as_ptr() as *const c_void,
+            directory.as_ptr(),
+            &startup.StartupInfo,
+            &mut info,
+        )
+    };
+    if created == FALSE {
+        return Err(last_error("CreateProcessW en el AppContainer"));
+    }
+    let process = Owned(info.hProcess);
+    let thread = Owned(info.hThread);
+    let ui_restricted = match restrict_ui(&job, &process) {
+        Ok(restricted) => restricted,
+        Err(error) => {
+            unsafe { TerminateProcess(process.0, 1) };
+            return Err(error);
+        }
+    };
+    if unsafe { AssignProcessToJobObject(job.0, process.0) } == FALSE {
+        let error = last_error("AssignProcessToJobObject");
+        unsafe { TerminateProcess(process.0, 1) };
+        return Err(error);
+    }
+    if unsafe { ResumeThread(thread.0) } == u32::MAX {
+        let error = last_error("ResumeThread");
+        unsafe { TerminateJobObject(job.0, 1) };
+        return Err(error);
+    }
+    drop(thread);
+    // The child's ends now live only in the child.
+    drop(child_in);
+    drop(child_out);
+    let stdin = unsafe { File::from_raw_handle(parent_in.into_raw() as _) };
+    let stdout = unsafe { File::from_raw_handle(parent_out.into_raw() as _) };
+    Ok(Box::new(Enclosed {
+        job,
+        process,
+        port,
+        memory,
+        ui_restricted,
+        stdin: Some(stdin),
+        stdout: Some(stdout),
+    }))
+}
+
+/// The supervisor's way to start the worker: this same binary, `worker`.
+pub fn spawn_worker(memory: usize) -> Result<Box<dyn Worker>, String> {
+    let program = std::env::current_exe().map_err(|e| e.to_string())?;
+    spawn(&program, &["worker"], memory)
+}
+
+/// The worker's own check, before reading anything: it must be in an
+/// AppContainer and in a Job. Otherwise it refuses to run.
+pub fn verify_enclosed() -> Result<(), String> {
+    unsafe {
+        let mut token: HANDLE = null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == FALSE {
+            return Err(last_error("OpenProcessToken"));
+        }
+        let token = Owned(token);
+        let (mut is_container, mut length) = (0u32, 0u32);
+        let read = GetTokenInformation(
+            token.0,
+            TokenIsAppContainer,
+            &mut is_container as *mut _ as _,
+            4,
+            &mut length,
+        );
+        if read == FALSE || is_container == 0 {
+            return Err("el trabajador no está dentro de un AppContainer".into());
+        }
+        let mut in_job = FALSE;
+        if IsProcessInJob(GetCurrentProcess(), null_mut(), &mut in_job) == FALSE || in_job == FALSE
+        {
+            return Err("el trabajador no está dentro de un Job".into());
+        }
+    }
+    Ok(())
+}

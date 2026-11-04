@@ -1,8 +1,16 @@
-# Connector workspace: the WIT world, its guest SDK, the example connector and the
-# build tooling. Kept apart from the desktop shell so the shell's lockfile and
-# build stay unchanged; the worker binary joins this workspace in delivery 2.
+# Connector workspace: the WIT world, its guest SDK, the example connector, the
+# build tooling and the nemein-connector worker binary. Kept apart from the
+# desktop shell so the shell's lockfile and build stay unchanged.
 [workspace]
-members = ["sdk", "examples/fictitious-bank-csv", "tools"]
+members = [
+  "sdk",
+  "examples/fictitious-bank-csv",
+  "tools",
+  "worker",
+  "fixtures/hostile",
+  "fixtures/hostile-describe",
+  "fixtures/hostile-manifest",
+]
 resolver = "2"
 
 [workspace.package]

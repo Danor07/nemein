@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.js test/properties/*.property.test.js test/fuzz/*.test.js",
     "cli": "node src/cli.js",
     "mcp": "node src/mcp.js",
-    "desktop:prepare": "node scripts/prepare-desktop.js",
+    "desktop:prepare": "node scripts/prepare-desktop.js && node scripts/prepare-connector.js",
     "desktop:dev": "npm run desktop:prepare && tauri dev",
     "desktop:build": "npm run desktop:prepare && tauri build",
     "lint": "eslint src public scripts test *.mjs --max-warnings 0 && prettier --check .github/workflows/*.yml && node scripts/generate-openapi.js --check",
@@ -23,7 +23,8 @@
     "mutation:main": "stryker run stryker.config.mjs && node scripts/mutation-gate.js",
     "mutation:workflow": "stryker run stryker.workflow.config.mjs && node scripts/mutation-gate.js reports/workflow-mutation/mutation.json",
     "mutation:runtime": "stryker run stryker.runtime.config.mjs && node scripts/mutation-gate.js reports/runtime-mutation/mutation.json",
-    "test:mutation": "npm run mutation:api-contract && npm run mutation:api && npm run mutation:import && npm run mutation:statement && npm run mutation:export && npm run mutation:main && npm run mutation:workflow && npm run mutation:runtime",
+    "mutation:connector-runner": "stryker run stryker.connector-runner.config.mjs && node scripts/mutation-gate.js reports/connector-runner-mutation/mutation.json",
+    "test:mutation": "npm run mutation:api-contract && npm run mutation:api && npm run mutation:import && npm run mutation:statement && npm run mutation:export && npm run mutation:main && npm run mutation:workflow && npm run mutation:runtime && npm run mutation:connector-runner",
     "quality": "npm run lint && npm run test:unit && npm run test:pbt && npm run test:fuzz && npm run test:mutation",
     "connector:check": "cd src-tauri/connector && cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo clippy --locked --target wasm32-unknown-unknown -p nemein-connector-sdk -p nemein-example-bank-csv -- -D warnings && cargo test --locked -p nemein-connector-sdk && cargo test --locked -p nemein-example-bank-csv && cargo test --locked -p nemein-connector-tools",
     "openapi:generate": "node scripts/generate-openapi.js"

@@ -52,6 +52,7 @@ jobs:
             main,
             workflow,
             runtime,
+            connector-runner,
           ]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -93,11 +94,11 @@ jobs:
       - name: Format and Clippy, native and wasm32
         env:
           CARGO_NET_OFFLINE: "true"
-        run: cargo fmt --all --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo clippy --locked --target wasm32-unknown-unknown -p nemein-connector-sdk -p nemein-example-bank-csv -- -D warnings
+        run: cargo fmt --all --check && cargo clippy --locked --workspace --all-targets --features nemein-connector/test-worker -- -D warnings && cargo clippy --locked --target wasm32-unknown-unknown -p nemein-connector-sdk -p nemein-example-bank-csv -p nemein-fixture-hostile -p nemein-fixture-hostile-describe -p nemein-fixture-hostile-manifest -- -D warnings
       - name: Regression, properties, fuzzing and the component without imports
         env:
           CARGO_NET_OFFLINE: "true"
-        run: cargo test --locked -p nemein-connector-sdk && cargo test --locked -p nemein-example-bank-csv && cargo test --locked -p nemein-connector-tools
+        run: cargo test --locked -p nemein-connector-sdk && cargo test --locked -p nemein-example-bank-csv && cargo test --locked -p nemein-connector-tools && cargo test --locked -p nemein-connector --features test-worker
       - name: Same component bytes from another folder and CARGO_HOME
         run: |
           cargo run --locked -q -p nemein-connector-tools -- build nemein-example-bank-csv "$RUNNER_TEMP/first.wasm"
@@ -152,10 +153,45 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The real enclosure (AppContainer, Job, pipes) only exists on Windows.
+  connector-windows:
+    name: Connector sandbox (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 50
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: cargo fetch --locked
+        working-directory: src-tauri/connector
+      - name: Clippy with the Windows enclosure
+        working-directory: src-tauri/connector
+        run: cargo clippy --locked -p nemein-connector --features test-worker --all-targets -- -D warnings
+      - name: Enclosure, hostile components and chain shutdown
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --locked -p nemein-connector --features test-worker --test sandbox -- --nocapture && cargo test --locked -p nemein-connector --features test-worker
+      - name: Node crash ends the supervisor and the worker
+        run: |
+          Push-Location src-tauri/connector
+          cargo run --locked -q -p nemein-connector-tools -- build nemein-fixture-hostile "$env:RUNNER_TEMP\hostile.wasm"
+          Pop-Location
+          $env:NEMEIN_CONNECTOR_CHAIN_BIN = (Resolve-Path src-tauri/connector/target/debug/nemein-connector.exe).Path
+          $env:NEMEIN_CONNECTOR_CHAIN_COMPONENT = "$env:RUNNER_TEMP\hostile.wasm"
+          node --test test/connector-chain.test.js
+
   # Branch protection requires this name, so it must fail whenever a needed job does not succeed.
   quality:
     name: Quality gate
-    needs: [checks, mutation, connector, connector-mutation]
+    needs: [checks, mutation, connector, connector-mutation, connector-windows]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -166,12 +202,13 @@ jobs:
           MUTATION: ${{ needs.mutation.result }}
           CONNECTOR: ${{ needs.connector.result }}
           CONNECTOR_MUTATION: ${{ needs.connector-mutation.result }}
-        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success
+          CONNECTOR_WINDOWS: ${{ needs.connector-windows.result }}
+        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success && test "$CONNECTOR_WINDOWS" = success
 
   native-static:
     name: Native static gate
     runs-on: windows-2022
-    timeout-minutes: 40
+    timeout-minutes: 55
     env:
       RUSTUP_TOOLCHAIN: 1.99.1
     steps:
@@ -181,7 +218,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .node-version
-      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm rebuild better-sqlite3 --ignore-scripts=false
       - name: Windows regression, PBT and ACL verification
@@ -193,10 +230,13 @@ jobs:
 
       - name: Build Windows installer for clean-machine smoke
         run: node node_modules/@tauri-apps/cli/tauri.js build --bundles nsis
-      - name: Silent install, shortcut, installed MCP and credential verification
+      - name: Example connector component for the installed smoke
+        working-directory: src-tauri/connector
+        run: cargo run --locked -q -p nemein-connector-tools -- build nemein-example-bank-csv "$env:RUNNER_TEMP\example-connector.wasm"
+      - name: Silent install, shortcut, installed MCP, connector and credential verification
         run: |
           $nemeinVersion = (Get-Content package.json | ConvertFrom-Json).version
-          ./scripts/smoke-installed.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe"
+          ./scripts/smoke-installed.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe" -ConnectorComponent "$env:RUNNER_TEMP\example-connector.wasm"
 
   linux-native:
     name: Linux native check
@@ -214,6 +254,8 @@ jobs:
         run: cargo test --manifest-path src-tauri/patches/glib/Cargo.toml --lib test_variant_iter_array
       - name: Desktop shell compiles on Linux
         run: |
-          mkdir -p desktop-resources/runtime
+          mkdir -p desktop-resources/runtime src-tauri/binaries
           touch desktop-resources/runtime/.keep
+          # tauri-build copies the externalBin sidecar; Linux never runs connectors.
+          touch src-tauri/binaries/nemein-connector-x86_64-unknown-linux-gnu
           cargo check --manifest-path src-tauri/Cargo.toml --locked

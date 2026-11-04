@@ -20,6 +20,9 @@
     "icon": [
       "icons/icon.ico"
     ],
+    "externalBin": [
+      "binaries/nemein-connector"
+    ],
     "resources": {
       "../desktop-resources/runtime/": "runtime/"
     },
