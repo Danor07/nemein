@@ -1,0 +1,14 @@
+[package]
+name = "nemein-fixture-hostile-describe"
+version = "1.0.0"
+description = "Hostile test component: never shipped, never a template"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nemein-connector-sdk = { path = "../../sdk" }

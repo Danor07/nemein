@@ -12,6 +12,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 
+# Same version Tauri already links; only the job that ends Node's process tree.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
 # glib 0.18 keeps the GHSA-wrw7-89jp-8q8g unsound iterator and wry pins gtk 0.18, which
 # cannot reach the fixed glib 0.20. Remove this once wry moves to a newer gtk.
 [patch.crates-io]

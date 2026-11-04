@@ -1,0 +1,5 @@
+# The worker and its test helpers link the C runtime statically: inside the
+# AppContainer only System32 is reachable, and vcruntime140.dll may not be
+# installed on a clean machine. Applies when cargo runs from this folder.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

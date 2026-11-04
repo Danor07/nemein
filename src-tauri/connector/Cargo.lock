@@ -593,6 +593,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
+name = "nemein-connector"
+version = "1.0.0"
+dependencies = [
+ "nemein-connector-tools",
+ "proptest",
+ "serde",
+ "serde_json",
+ "wasmparser 0.261.0",
+ "wasmtime",
+ "wat",
+ "windows-sys",
+]
+
+[[package]]
 name = "nemein-connector-sdk"
 version = "1.0.0"
 dependencies = [
@@ -622,6 +636,27 @@ dependencies = [
  "nemein-connector-sdk",
  "proptest",
  "serde_json",
+]
+
+[[package]]
+name = "nemein-fixture-hostile"
+version = "1.0.0"
+dependencies = [
+ "nemein-connector-sdk",
+]
+
+[[package]]
+name = "nemein-fixture-hostile-describe"
+version = "1.0.0"
+dependencies = [
+ "nemein-connector-sdk",
+]
+
+[[package]]
+name = "nemein-fixture-hostile-manifest"
+version = "1.0.0"
+dependencies = [
+ "nemein-connector-sdk",
 ]
 
 [[package]]

@@ -86,3 +86,23 @@ El workspace `src-tauri/connector` (WIT, SDK, conector de ejemplo y `nemein-comp
 
 Estos jobs corren en el runner, no en el contenedor aislado del job Linux: Cargo descarga antes y las pruebas corren con `CARGO_NET_OFFLINE`. El contrato del ejemplo también se prueba en Node, dentro de los jobs existentes. Localmente: `npm run connector:check`; la mutación se describe en [conectores](conectores.md). `npm run quality` no compila Rust.
 
+## Conectores WASM P3.2
+
+El trabajador encerrado agrega cuatro jobs, todos requeridos por `Quality gate`:
+
+- `Connector component` incluye las partes portables de `nemein-connector`: tramas, protocolo, ejecución con wasmtime, supervisor y límites.
+- `Connector worker mutation` las mide con cargo-mutants en Linux, con su propia configuración y la feature de prueba. Pasar esa feature en `Connector mutation` dejó sin medir el SDK, el ejemplo y la herramienta: Cargo la rechaza para esos paquetes y todos sus mutantes contaban como inviables. El verificador ahora rechaza un paquete del que no se midió ningún mutante.
+- `Connector sandbox (Windows)` corre en windows-2022: Clippy del encierro sin advertencias, las pruebas del encierro real y la cadena Node, supervisor y trabajador.
+- `Connector enclosure mutation` mide `sandbox.rs` y `main.rs` con cargo-mutants en cuatro shards de Windows. El job siguiente pasa los cuatro `outcomes.json` al mismo verificador, que los juzga como una sola corrida: mínimo 90 %, sin Timeout, Failure ni una línea base fallida en cualquiera de los shards.
+
+Dos decisiones evitan mutantes que ninguna prueba puede matar sin bajar el umbral:
+
+- Los conjuntos de banderas (mitigaciones, UI, límites del Job, permisos y creación del proceso) se arman con una sola función de unión. Con `A | B` escrito a mano, cambiar `|` por `^` da el mismo valor cuando los bits no se pisan. La función se prueba con bits que sí se pisan, y pruebas de respuesta conocida fijan cada conjunto en su valor documentado.
+- La decisión de memoria (mensaje del Job o pico de al menos nueve décimos del límite) es una función pura de `supervise.rs`, probada en sus bordes en Linux.
+
+La sonda nativa compara lo que el encierro aplicó, leído desde adentro, con valores escritos a mano, nunca con las funciones que los arman.
+
+Las pruebas de Rust ubican los binarios junto a su propio ejecutable (`tests/common::bin`) y no con `CARGO_BIN_EXE_*`. cargo-mutants copia un `target/` ya compilado, y una prueba que no se recompila en la copia conserva la ruta del binario original, sin mutar. La primera medición de Windows dio por vivo hasta un `main` vacío por esa razón. Las lecturas de caños tienen plazo, así que un handle que nunca se cierra falla la prueba en lugar de llegar al plazo de cargo-mutants. El ciclo de vida del perfil se prueba con un AppContainer propio de cada proceso, para que dos copias en paralelo no se pisen.
+
+Stryker suma el alcance `connector-runner` sobre `src/connector-runner.js`. El supervisor falso termina solo a los 8 s, así que un mutante que deja colgado al ejecutor falla una aserción y no llega al plazo de Stryker.
+

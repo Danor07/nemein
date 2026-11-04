@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$InstallerPath)
+param([Parameter(Mandatory=$true)][string]$InstallerPath, [Parameter(Mandatory=$true)][string]$ConnectorComponent)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
   throw 'This installer smoke test runs only on an ephemeral GitHub Windows runner.'
@@ -10,7 +10,7 @@ $setup = Start-Process -FilePath $installer -ArgumentList '/S' -WindowStyle Hidd
 if (-not $setup.WaitForExit(180000)) { Stop-Process -Id $setup.Id -Force; throw 'Silent installation exceeded three minutes.' }
 if ($setup.ExitCode -ne 0) { throw "NSIS exited with $($setup.ExitCode)" }
 $exe = Join-Path $installedRoot 'nemein.exe'
-foreach ($required in @($exe, (Join-Path $installedRoot 'uninstall.exe'), (Join-Path $installedRoot 'runtime/node.exe'))) {
+foreach ($required in @($exe, (Join-Path $installedRoot 'uninstall.exe'), (Join-Path $installedRoot 'runtime/node.exe'), (Join-Path $installedRoot 'nemein-connector.exe'))) {
   if (!(Test-Path -LiteralPath $required -PathType Leaf)) { throw "Missing installed file: $required" }
 }
 $entry = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Nemein'
@@ -27,8 +27,10 @@ foreach ($link in $links) {
 if (!$validLink) { throw 'Start menu shortcut does not point to the installed executable.' }
 & node scripts/smoke-installed-mcp.mjs $installedRoot
 if ($LASTEXITCODE -ne 0) { throw 'Installed MCP smoke failed.' }
+& node scripts/smoke-installed-connector.mjs $installedRoot $ConnectorComponent $installer
+if ($LASTEXITCODE -ne 0) { throw 'Installed connector smoke failed.' }
 & node --test test/credentials.test.js
 if ($LASTEXITCODE -ne 0) { throw 'Windows credential tests failed after installation.' }
 $nativeData = Join-Path $env:RUNNER_TEMP ('nemein-native-' + [guid]::NewGuid().ToString('N'))
 & "$PSScriptRoot/smoke-desktop.ps1" -ExecutablePath $exe -DataDir $nativeData
-Write-Output 'CLEAN INSTALL OK: silent NSIS, Windows registry, Start menu target, installed MCP, credentials, and native startup.'
+Write-Output 'CLEAN INSTALL OK: silent NSIS, Windows registry, Start menu target, installed MCP, installed connector, credentials, and native startup.'

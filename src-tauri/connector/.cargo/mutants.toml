@@ -1,6 +1,11 @@
 # cargo-mutants over the connector decisions: account context, batch text,
-# identities, the example's mapping and the no-imports inspection.
-# scripts/mutation-gate.js --cargo-mutants requires 90 % and no timeouts.
+# identities, the example's mapping and the no-imports inspection. The worker
+# is measured with its own configurations: mutants-worker.toml (portable
+# parts, Linux) and mutants-windows.toml (enclosure, Windows). Its test
+# feature cannot be passed here: Cargo refuses it for these packages, and
+# every mutant would count as unviable.
+# scripts/mutation-gate.js --cargo-mutants requires 90 % and no timeouts, and
+# rejects a package none of whose mutants was measured.
 examine_globs = [
   "sdk/src/**/*.rs",
   "examples/fictitious-bank-csv/src/**/*.rs",
