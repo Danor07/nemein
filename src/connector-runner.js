@@ -83,30 +83,32 @@ export function responseReader() {
   let expected = null;
   let frame = null;
   const protocol = (message) => fail("CONNECTOR_PROTOCOL", message);
-  // The first n bytes, copied; at most 14 bytes plus the 64 KiB header.
-  const prefix = (n) => Buffer.concat(chunks, n);
+  // The first n bytes, copied, or null while they have not all arrived. Only
+  // the prefix is copied: at most 14 bytes plus the 64 KiB header.
+  const prefix = (n) => (length < n ? null : Buffer.concat(chunks, n));
   function measure() {
-    if (length < 5) return null;
     const head = prefix(5);
+    if (!head) return null;
     if (
       !head.subarray(0, 3).equals(MAGIC) ||
       head[3] !== VERSION ||
       head[4] !== RESPONSE
     )
       throw protocol("La respuesta del conector no es una trama válida.");
-    if (length < 9) return null;
-    const headerLength = prefix(9).readUInt32LE(5);
+    const lengths = prefix(9);
+    if (!lengths) return null;
+    const headerLength = lengths.readUInt32LE(5);
     if (headerLength > LIMITS.header)
       throw protocol("El encabezado de la respuesta supera su límite.");
-    if (length < 10 + headerLength) return null;
-    const count = prefix(10 + headerLength)[9 + headerLength];
+    const counted = prefix(10 + headerLength);
+    if (!counted) return null;
+    const count = counted[9 + headerLength];
     if (count > 1)
       throw protocol("La respuesta del conector trae bloques de más.");
     if (count === 0) return 10 + headerLength;
-    if (length < 14 + headerLength) return null;
-    const blobLength = prefix(14 + headerLength).readUInt32LE(
-      10 + headerLength,
-    );
+    const blob = prefix(14 + headerLength);
+    if (!blob) return null;
+    const blobLength = blob.readUInt32LE(10 + headerLength);
     if (blobLength > LIMITS.output)
       throw protocol("El lote de la respuesta supera su límite.");
     return 14 + headerLength + blobLength;
@@ -317,9 +319,9 @@ export function runConnector({
     const [file, ...args] = [command].flat();
     // Only SystemRoot: the supervisor needs nothing else from Node's
     // environment, and a stderr nobody reads must not be able to block it.
+    // The supervisor is a GUI-subsystem binary, so it never opens a console.
     const child = spawn(file, args, {
       stdio: ["pipe", "pipe", "ignore"],
-      windowsHide: true,
       env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" },
     });
     const reader = responseReader();

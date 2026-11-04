@@ -3,12 +3,14 @@
 //! The worker starts suspended in a less-privileged AppContainer (LPAC) with no
 //! capabilities, inside a Job object, and only then runs:
 //!
-//! - **Token**: AppContainer SID derived from `Nemein.ConnectorWorker`, with no
-//!   profile (so no writable folder) and no capabilities, opted out of
-//!   `ALL APPLICATION PACKAGES` (LPAC): only objects that name this SID, or
-//!   `ALL RESTRICTED APPLICATION PACKAGES` like System32, are reachable. The
-//!   supervisor grants read and execute on the worker binary and its folder,
-//!   nothing else; never on the budget's data folder.
+//! - **Token**: the AppContainer `Nemein.ConnectorWorker`, with no
+//!   capabilities, opted out of `ALL APPLICATION PACKAGES` (LPAC): only
+//!   objects that name this SID, or `ALL RESTRICTED APPLICATION PACKAGES` like
+//!   System32, are reachable. Windows requires its profile to be registered,
+//!   which gives it a folder of its own under `%LOCALAPPDATA%\Packages`; no
+//!   other folder of the user is reachable. The supervisor grants read and
+//!   execute on the worker binary and its folder, nothing else; never on the
+//!   budget's data folder.
 //! - **Handles**: exactly two anonymous pipes are inherited (`HANDLE_LIST`),
 //!   with an environment block that only carries `SystemRoot`.
 //! - **Job**: `KILL_ON_JOB_CLOSE`, one active process, a committed memory
@@ -40,7 +42,9 @@ use windows_sys::Win32::Security::Authorization::{
     EXPLICIT_ACCESS_W, GRANT_ACCESS, NO_MULTIPLE_TRUSTEE, SE_FILE_OBJECT, TRUSTEE_IS_SID,
     TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
-use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
+use windows_sys::Win32::Security::Isolation::{
+    CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
+};
 use windows_sys::Win32::Security::{
     FreeSid, GetTokenInformation, TokenIsAppContainer, ACL, DACL_SECURITY_INFORMATION,
     NO_INHERITANCE, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES, SECURITY_CAPABILITIES,
@@ -80,8 +84,7 @@ use windows_sys::Win32::System::IO::{
     CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED,
 };
 
-/// The AppContainer every worker runs in. Its SID is derived from this name;
-/// no profile is registered, so the worker has no folder of its own.
+/// The AppContainer every worker runs in. Its SID is derived from this name.
 pub const APPCONTAINER_NAME: &str = "Nemein.ConnectorWorker";
 
 // winbase.h macros that windows-sys does not carry. Each policy is a 4-bit
@@ -206,15 +209,43 @@ impl ContainerSid {
     }
 }
 
-/// Derives the SID from the name; nothing is registered on the system.
+/// `HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS)`.
+const PROFILE_EXISTS: i32 = 0x8007_00b7_u32 as i32;
+
+/// The AppContainer SID, registering the profile the first time. Windows
+/// refuses to start a process in an AppContainer whose profile was never
+/// registered (`CreateProcessW` fails with error 2), so, as Chromium does, the
+/// profile is created once per user and its SID derived from then on. The
+/// name fixes the SID, so it is the same in every run.
 pub fn container_sid() -> Result<ContainerSid, String> {
     let name = wide(APPCONTAINER_NAME);
+    let display = wide("Nemein: conectores encerrados");
+    let description = wide("Ejecuta conectores WASM de Nemein sin capacidades.");
     let mut sid: PSID = null_mut();
-    let result = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid) };
-    if result < 0 || sid.is_null() {
+    let created = unsafe {
+        CreateAppContainerProfile(
+            name.as_ptr(),
+            display.as_ptr(),
+            description.as_ptr(),
+            null(),
+            0,
+            &mut sid,
+        )
+    };
+    if created >= 0 && !sid.is_null() {
+        return Ok(ContainerSid(sid));
+    }
+    if created != PROFILE_EXISTS {
+        return Err(format!(
+            "no se pudo registrar el AppContainer: 0x{:08x}",
+            created as u32
+        ));
+    }
+    let derived = unsafe { DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid) };
+    if derived < 0 || sid.is_null() {
         return Err(format!(
             "no se pudo obtener el AppContainer: 0x{:08x}",
-            result as u32
+            derived as u32
         ));
     }
     Ok(ContainerSid(sid))

@@ -4,7 +4,7 @@
 // process id) and `.request.json` (the request header and the environment it
 // got), so tests can check what reached it and that it is gone afterwards.
 // Fictitious data only.
-import { closeSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 
 const [mode, responseFile] = process.argv.slice(2);
 const response = JSON.parse(readFileSync(responseFile, "utf8"));
@@ -84,6 +84,10 @@ function requestComplete(input) {
 function act(isEnded) {
   switch (mode) {
     case "answer":
+      return process.stdout.write(answer());
+    case "chatty":
+      // A megabyte of stderr first: it blocks unless the runner discards it.
+      writeSync(2, Buffer.alloc(1 << 20, "x"));
       return process.stdout.write(answer());
     case "require-open":
       // Answers only if stdin is still open a moment after the request.

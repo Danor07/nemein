@@ -127,7 +127,7 @@ Cada largo se compara con su tope antes de leer un solo byte de ese campo: encab
 
 | Pieza | Qué hace |
 | --- | --- |
-| Token | AppContainer menos privilegiado (LPAC) con SID derivado de `Nemein.ConnectorWorker`, sin perfil registrado, por lo que no tiene ninguna carpeta escribible, y sin capacidades. Sólo alcanza objetos que nombran su SID o `ALL RESTRICTED APPLICATION PACKAGES`, como System32. |
+| Token | AppContainer menos privilegiado (LPAC) `Nemein.ConnectorWorker`, sin capacidades. Sólo alcanza objetos que nombran su SID o `ALL RESTRICTED APPLICATION PACKAGES`, como System32. Windows no crea procesos en un AppContainer sin perfil registrado (`CreateProcessW` falla con el error 2), así que el supervisor registra el perfil la primera vez, como Chromium, y después sólo deriva el mismo SID. El perfil le da al trabajador una carpeta propia bajo `%LOCALAPPDATA%\Packages`: es lo único que puede escribir, y desde ahí no alcanza nada del usuario. |
 | Permisos de archivos | El supervisor otorga lectura y ejecución a ese SID sólo sobre `nemein-connector.exe` y su carpeta, sin herencia, y nunca sobre la carpeta de datos. Si el permiso ya está, no toca nada. Nemein se instala en `%LOCALAPPDATA%\Nemein`, y el usuario es dueño de esa carpeta, así que no hace falta elevación. |
 | Job | `KILL_ON_JOB_CLOSE`, un solo proceso activo, 256 MiB comprometidos y muerte ante excepciones no manejadas. El supervisor tiene el único handle: si muere por cualquier motivo, muere el trabajador. Las restricciones de UI se agregan cuando el trabajador no está en otro Job, porque los Jobs con restricciones de UI no se pueden anidar; dentro de la aplicación de escritorio ya está en el Job de Nemein, y ahí la UI la cubre el bloqueo de Win32k. |
 | Proceso | Se crea suspendido, se asigna al Job y recién entonces corre. Sin procesos hijos (`CHILD_PROCESS_RESTRICTED`), sin consola (`DETACHED_PROCESS`), con un entorno que sólo tiene `SystemRoot`, y la carpeta del binario como directorio de trabajo. |
@@ -163,7 +163,7 @@ El ejecutor de Node responde con un `Error` con `code`:
 
 El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor más 5): si el supervisor quedara trabado, lo mata y responde `CONNECTOR_TIMEOUT`. Gana el primer desenlace. Con una respuesta válida cierra stdin; ante cualquier error, además, mata al supervisor, y con él cae el Job del trabajador.
 
-Node lanza al supervisor con un entorno que sólo tiene `SystemRoot`. En Windows, libuv agrega las variables que Windows necesita para crear procesos, como `PATH`, `TEMP` y `USERPROFILE`. El supervisor no las usa y el trabajador recibe un bloque propio que sólo tiene `SystemRoot`.
+`nemein-connector.exe` es un binario de subsistema GUI: nunca abre una ventana de consola, lo lance quien lo lance, y stdin y stdout siguen siendo los caños que recibe. Node lanza al supervisor con un entorno que sólo tiene `SystemRoot`. En Windows, libuv agrega las variables que Windows necesita para crear procesos, como `PATH`, `TEMP` y `USERPROFILE`. El supervisor no las usa y el trabajador recibe un bloque propio que sólo tiene `SystemRoot`.
 
 ### Empaquetado
 

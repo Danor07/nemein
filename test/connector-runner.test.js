@@ -267,7 +267,10 @@ test("interpret: connector and host errors keep their codes apart", () => {
         { header: Buffer.from("{"), blobs: [] },
         { op: "parse", accountId: "1" },
       ),
-    code("CONNECTOR_PROTOCOL"),
+    (error) => {
+      assert.equal(error.message, "El encabezado de la respuesta no es JSON.");
+      return code("CONNECTOR_PROTOCOL")(error);
+    },
   );
 });
 
@@ -517,98 +520,140 @@ const alive = (pid) => {
 // Whether the fake that answered from `file` is gone within `ms`.
 async function fakeGone(file, ms = 2000) {
   const pid = Number(readFileSync(file + ".pid", "utf8"));
-  for (let waited = 0; waited < ms; waited += 25) {
-    if (!alive(pid)) return true;
+  for (let waited = 0; alive(pid); waited += 25) {
+    if (waited >= ms) return false;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  return false;
+  return true;
 }
-const timers = () =>
-  process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
-
-test("run: answers through a supervisor that keeps the protocol", async (t) => {
-  const file = responseFile(t, { status: "ok", manifest }, [batchText]);
-  for (const mode of ["answer", "slow", "require-open"]) {
-    const result = await withFake(mode, file);
-    assert.equal(result.batch.entries.length, 5, mode);
-    // Closing stdin after the answer lets the supervisor go.
-    assert.ok(await fakeGone(file), mode);
-  }
-  const described = await withFake(
-    "answer",
-    responseFile(t, { status: "ok", manifest }),
-    { op: "describe", input: undefined, expectedManifest: manifest },
-  );
-  assert.deepEqual(described, { manifest });
-});
-
-test("run: the supervisor gets the request and SystemRoot, nothing else", async (t) => {
-  const file = responseFile(t, { status: "ok", manifest }, [batchText]);
-  process.env.NEMEIN_TEST_LEAK = "no debe pasar";
-  t.after(() => delete process.env.NEMEIN_TEST_LEAK);
-  await withFake("answer", file, { accountId: "1", config: undefined });
-  const received = JSON.parse(readFileSync(file + ".request.json", "utf8"));
-  assert.deepEqual(received.header, {
-    op: "parse",
-    config: "",
-    account_id: "1",
+// Tests that start processes stop at the first failure: a broken runner
+// would otherwise make each later run wait for its backstop, past the
+// mutation tester's deadline. A failure fails fast as an assertion instead.
+let broken = null;
+const processTest = (name, fn) =>
+  test(name, async (t) => {
+    assert.equal(broken, null, "an earlier process test failed: " + broken);
+    try {
+      await fn(t);
+    } catch (error) {
+      broken = name;
+      throw error;
+    }
   });
-  assert.equal(
-    received.env.SystemRoot,
-    process.env.SystemRoot ?? "C:\\Windows",
-  );
-  assert.equal(received.env.NEMEIN_TEST_LEAK, undefined);
-  // On Windows libuv adds the variables CreateProcess needs (PATH, TEMP...);
-  // the supervisor ignores them and gives the worker only SystemRoot.
-  if (process.platform !== "win32")
-    assert.deepEqual(Object.keys(received.env), ["SystemRoot"]);
-});
 
-test("run: a settled run leaves no backstop timer behind", async (t) => {
+processTest(
+  "run: answers through a supervisor that keeps the protocol",
+  async (t) => {
+    const file = responseFile(t, { status: "ok", manifest }, [batchText]);
+    for (const mode of ["answer", "slow", "require-open"]) {
+      const result = await withFake(mode, file);
+      assert.equal(result.batch.entries.length, 5, mode);
+      // Closing stdin after the answer lets the supervisor go.
+      assert.ok(await fakeGone(file), mode);
+    }
+    const described = await withFake(
+      "answer",
+      responseFile(t, { status: "ok", manifest }),
+      { op: "describe", input: undefined, expectedManifest: manifest },
+    );
+    assert.deepEqual(described, { manifest });
+  },
+);
+
+processTest(
+  "run: the supervisor gets the request and SystemRoot, nothing else",
+  async (t) => {
+    const file = responseFile(t, { status: "ok", manifest }, [batchText]);
+    process.env.NEMEIN_TEST_LEAK = "no debe pasar";
+    t.after(() => delete process.env.NEMEIN_TEST_LEAK);
+    await withFake("answer", file, { accountId: "1", config: undefined });
+    const received = JSON.parse(readFileSync(file + ".request.json", "utf8"));
+    assert.deepEqual(received.header, {
+      op: "parse",
+      config: "",
+      account_id: "1",
+    });
+    assert.equal(
+      received.env.SystemRoot,
+      process.env.SystemRoot ?? "C:\\Windows",
+    );
+    assert.equal(received.env.NEMEIN_TEST_LEAK, undefined);
+    // On Windows libuv adds the variables CreateProcess needs (PATH, TEMP...);
+    // the supervisor ignores them and gives the worker only SystemRoot.
+    if (process.platform !== "win32")
+      assert.deepEqual(Object.keys(received.env), ["SystemRoot"]);
+  },
+);
+
+processTest("run: a settled run stops its backstop", async (t) => {
   const file = responseFile(t, { status: "ok", manifest }, [batchText]);
-  const before = timers();
-  await withFake("linger", file, { timeoutMs: undefined });
-  assert.equal(timers(), before);
+  // The fake outlives its stdin by 3 s; a backstop left running would kill
+  // it at 300 ms.
+  await withFake("linger", file, { timeoutMs: 300 });
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  assert.ok(!(await fakeGone(file, 0)), "nothing killed it after the answer");
   assert.equal(LIMITS.timeoutMs, LIMITS.deadlineMs + 5000);
 });
 
-test("run: a misbehaving or missing supervisor fails closed", async (t) => {
-  const file = responseFile(t, { status: "ok", manifest }, [batchText]);
-  await assert.rejects(
-    withFake("crash", file),
-    code("CONNECTOR_SUPERVISOR_FAILED"),
-  );
-  await assert.rejects(
-    withFake("truncate", file),
-    code("CONNECTOR_SUPERVISOR_FAILED"),
-  );
-  for (const mode of ["garbage", "extra"]) {
-    await assert.rejects(withFake(mode, file), code("CONNECTOR_PROTOCOL"));
-    assert.ok(await fakeGone(file), mode);
-  }
-  const started = Date.now();
-  await assert.rejects(withFake("huge-blob", file), code("CONNECTOR_PROTOCOL"));
-  assert.ok(Date.now() - started < 3000, "refused at the declared length");
-  assert.ok(await fakeGone(file), "huge-blob");
-  const hang = Date.now();
-  await assert.rejects(
-    withFake("hang", file, { timeoutMs: 300 }),
-    code("CONNECTOR_TIMEOUT"),
-  );
-  assert.ok(Date.now() - hang < 3000);
-  assert.ok(await fakeGone(file), "hang");
-  // A supervisor that stops reading the request is stopped, not awaited.
-  await assert.rejects(
-    withFake("close-stdin", file, { component: Buffer.alloc(1 << 20) }),
-    code("CONNECTOR_SUPERVISOR_FAILED"),
-  );
-  assert.ok(await fakeGone(file), "close-stdin");
-});
+processTest(
+  "run: the supervisor's stderr is discarded, so it cannot block",
+  async (t) => {
+    const file = responseFile(t, { status: "ok", manifest }, [batchText]);
+    const result = await withFake("chatty", file);
+    assert.equal(result.batch.entries.length, 5);
+  },
+);
 
-test("run: a supervisor that cannot start fails closed", async (t) => {
+processTest(
+  "run: a misbehaving or missing supervisor fails closed",
+  async (t) => {
+    const file = responseFile(t, { status: "ok", manifest }, [batchText]);
+    await assert.rejects(
+      withFake("crash", file),
+      code("CONNECTOR_SUPERVISOR_FAILED"),
+    );
+    await assert.rejects(
+      withFake("truncate", file),
+      code("CONNECTOR_SUPERVISOR_FAILED"),
+    );
+    for (const mode of ["garbage", "extra"]) {
+      await assert.rejects(withFake(mode, file), code("CONNECTOR_PROTOCOL"));
+      assert.ok(await fakeGone(file), mode);
+    }
+    const started = Date.now();
+    await assert.rejects(
+      withFake("huge-blob", file),
+      code("CONNECTOR_PROTOCOL"),
+    );
+    assert.ok(Date.now() - started < 3000, "refused at the declared length");
+    assert.ok(await fakeGone(file), "huge-blob");
+    const hang = Date.now();
+    await assert.rejects(
+      withFake("hang", file, { timeoutMs: 300 }),
+      code("CONNECTOR_TIMEOUT"),
+    );
+    assert.ok(Date.now() - hang < 3000);
+    assert.ok(await fakeGone(file), "hang");
+    // A supervisor that stops reading the request is stopped, not awaited.
+    await assert.rejects(
+      withFake("close-stdin", file, { component: Buffer.alloc(1 << 20) }),
+      (error) => {
+        assert.equal(
+          error.message,
+          "El supervisor de conectores no recibió la solicitud completa.",
+        );
+        assert.equal(typeof error.cause?.code, "string", String(error.cause));
+        return code("CONNECTOR_SUPERVISOR_FAILED")(error);
+      },
+    );
+    assert.ok(await fakeGone(file), "close-stdin");
+  },
+);
+
+processTest("run: a supervisor that cannot start fails closed", async (t) => {
   const missing = path.join(os.tmpdir(), "no-existe-nemein-connector.exe");
   await assert.rejects(
-    runConnector({ ...request, command: missing }),
+    runConnector({ ...request, command: missing, timeoutMs: 2000 }),
     (error) => {
       assert.equal(error.cause.code, "ENOENT");
       return code("CONNECTOR_UNAVAILABLE")(error);
@@ -621,7 +666,7 @@ test("run: a supervisor that cannot start fails closed", async (t) => {
   });
   process.env.NEMEIN_CONNECTOR_BIN = missing;
   await assert.rejects(
-    runConnector({ ...request, command: undefined }),
+    runConnector({ ...request, command: undefined, timeoutMs: 2000 }),
     (error) => {
       assert.equal(error.cause.code, "ENOENT");
       return code("CONNECTOR_UNAVAILABLE")(error);
@@ -641,7 +686,7 @@ test("run: a supervisor that cannot start fails closed", async (t) => {
   const notRunnable = path.join(dir, "nemein-connector.txt");
   writeFileSync(notRunnable, "no es un ejecutable", { mode: 0o600 });
   await assert.rejects(
-    runConnector({ ...request, command: notRunnable }),
+    runConnector({ ...request, command: notRunnable, timeoutMs: 2000 }),
     (error) => {
       assert.notEqual(error.cause.code, "ENOENT");
       return code("CONNECTOR_SUPERVISOR_FAILED")(error);
@@ -687,7 +732,7 @@ test("run: only Windows runs connectors, and requests are checked before spawnin
     );
 });
 
-test("run: limits are inclusive", async (t) => {
+processTest("run: limits are inclusive", async (t) => {
   const file = responseFile(t, { status: "ok", manifest }, [batchText]);
   const result = await withFake("answer", file, {
     component: Buffer.alloc(LIMITS.component),

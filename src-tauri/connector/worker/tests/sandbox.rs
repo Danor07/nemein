@@ -181,7 +181,12 @@ fn the_probe_is_denied_everything_enclosed_and_allowed_without_the_enclosure() {
             "enclosed: {capability}: {report}"
         );
     }
-    assert_eq!(report["environment"], 1, "only SystemRoot: {report}");
+    assert_eq!(
+        report["variables"],
+        serde_json::json!(["SystemRoot"]),
+        "only SystemRoot: {report}"
+    );
+    assert_eq!(report["environment"], 1, "{report}");
     assert!(!writable.join("probe-wrote-here.txt").exists());
 
     // What the enclosure applied, read from inside and compared with the

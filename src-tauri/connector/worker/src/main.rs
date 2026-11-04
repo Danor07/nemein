@@ -1,5 +1,9 @@
 //! Entry point; see the crate documentation in `lib.rs`.
 
+// A GUI-subsystem binary never gets a console window, however it is started;
+// stdin and stdout still are the pipes its parent hands over.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use nemein_connector::frame::{self, Kind};
 use nemein_connector::limits::{DEADLINE_MS, MEMORY_BYTES};
 use nemein_connector::protocol::{self, code};

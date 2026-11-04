@@ -189,7 +189,17 @@ fn main() {
         .args(["/c", "exit", "0"])
         .status()
         .is_ok();
-    let environment = std::env::vars_os().count();
+    let mut names: Vec<String> = std::env::vars_os()
+        .map(|(name, _)| name.to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    let environment = names.len();
+    // Names only, never values, and plain ASCII in practice; quoted as JSON.
+    let variables = names
+        .iter()
+        .map(|n| format!("\"{}\"", n.replace(['"', '\\'], "_")))
+        .collect::<Vec<_>>()
+        .join(",");
     #[cfg(windows)]
     let enclosure = format!(
         r#","token":{},"job":{},"mitigations":{}"#,
@@ -200,7 +210,7 @@ fn main() {
     #[cfg(not(windows))]
     let enclosure = String::new();
     let line = format!(
-        r#"{{"read":"{}","write":"{}","network":"{}","process":"{}","environment":{environment}{enclosure}}}"#,
+        r#"{{"read":"{}","write":"{}","network":"{}","process":"{}","environment":{environment},"variables":[{variables}]{enclosure}}}"#,
         outcome(read),
         outcome(write),
         outcome(network),
