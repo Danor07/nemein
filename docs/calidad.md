@@ -135,7 +135,7 @@ Para llegar ahí no se bajó el umbral ni se excluyeron operadores:
 Dos alcances nuevos de Stryker, en la matriz de mutación de CI, con el mismo mínimo del 90 % y el mismo verificador. Corren primero las propiedades y el fuzzing, y después la regresión.
 
 - **`connector-signature`:** `src/connector-signature.js` y `scripts/connector-sign.js`. Resultado: **100 %** (192 de 192), sin timeouts, errores ni mutantes sin cobertura.
-- **`connector-screen`:** el script de la página (`public/connectors.js`) y las rutas, el tope de la instalación, el aviso de plataforma y la lectura de la pantalla en `src/server.js`. Resultado: SCREEN.
+- **`connector-screen`:** el script de la página (`public/connectors.js`) y las rutas, el tope de la instalación, el aviso de plataforma y la lectura de la pantalla en `src/server.js`. Resultado: **100 %** (147 de 147), sin timeouts, errores ni mutantes sin cobertura.
 
 El alcance `connectors` suma la revisión del lote, la firma en el inventario y la confirmación sin firma válida, y en `src/access.js` el resumen del archivo en la auditoría. Resultado: CONNECTORS.
 
