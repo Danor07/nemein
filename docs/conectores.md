@@ -178,7 +178,7 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
 - Fuzzing generativo: bytes arbitrarios y extractos válidos con ediciones de bytes; sólo códigos conocidos y mensajes acotados, o un lote que cumple los invariantes. La inspección se prueba con componentes hostiles escritos a mano: imports de función, instancia, tipo, recurso, módulo y componente; exportaciones de más o con otra versión; binarios corruptos.
 - De punta a punta: la receta compila el ejemplo, el componente no tiene imports ni a nivel de componente ni en su núcleo, y wasmtime (`runtime`, `cranelift`, `component-model`, `std`, sin WASI ni `async`) lo ejecuta con un `Linker` vacío y devuelve exactamente el lote de oro.
 - Node: [connector-contract.test.js](../test/connector-contract.test.js) valida el lote de oro con `validateImportBatch`, recalcula las identidades desde el CSV y comprueba que el mundo no declara imports. Corre sin Rust en los jobs Linux y Windows existentes.
-- Mutación: `cargo-mutants` 27.1.0 sobre el SDK, el ejemplo y la herramienta (`.cargo/mutants.toml`). Cada mutante se juzga sólo con las pruebas de su propio paquete. `scripts/mutation-gate.js --cargo-mutants` aplica el mismo mínimo del 90 % y rechaza Timeout, Failure y una línea base fallida. Los mutantes que no compilan (Unviable) no miden nada y quedan fuera, como en el propio cargo-mutants. El plazo mínimo por mutante es de 300 s, porque la primera prueba de cada copia compila el componente; un timeout rechaza la medición.
+- Mutación: `cargo-mutants` 27.1.0 sobre el SDK, el ejemplo y la herramienta (`.cargo/mutants.toml`). Cada mutante se juzga sólo con las pruebas de su propio paquete. `scripts/mutation-gate.js --cargo-mutants` aplica el mismo mínimo del 90 % y rechaza Timeout, Failure y una línea base fallida. Los mutantes que no compilan (Unviable) no miden nada y quedan fuera, como en el propio cargo-mutants. Pero si ningún mutante de un paquete se midió, el verificador rechaza la corrida: así quedaban fuera, en silencio, el SDK, el ejemplo y la herramienta cuando una opción de Cargo no aplicaba a esos paquetes. El plazo mínimo por mutante es de 300 s, porque la primera prueba de cada copia compila el componente; un timeout rechaza la medición.
 
 ### Pruebas del trabajador encerrado
 
@@ -200,13 +200,13 @@ El ejecutor también tiene un plazo de respaldo de 15 s (los 10 s del supervisor
   - propiedades: ida y vuelta de solicitudes con un decodificador independiente, cualquier partición de una respuesta, largos declarados y manifiestos;
   - fuzzing de respuestas reales mutadas.
 - **Mutación:**
-  - cargo-mutants mide las partes portables del trabajador (`frame`, `protocol`, `execute`, `supervise`, `limits`) dentro de `Connector mutation`;
+  - cargo-mutants mide las partes portables del trabajador (`frame`, `protocol`, `execute`, `supervise`, `limits`) en su propio job, `Connector worker mutation`, con [mutants-worker.toml](../src-tauri/connector/.cargo/mutants-worker.toml) y la feature de prueba, que Cargo rechaza para los demás paquetes;
   - `sandbox.rs` y `main.rs` se miden en Windows con [mutants-windows.toml](../src-tauri/connector/.cargo/mutants-windows.toml), en cuatro shards que el verificador juzga como una sola corrida. Las banderas se arman con una sola función de unión, para que reemplazar `|` por `^` no deje mutantes equivalentes, y pruebas de respuesta conocida fijan cada conjunto en su valor documentado;
   - Stryker mide `src/connector-runner.js` en el alcance `connector-runner`;
   - pruebas de respuesta conocida fijan cada tope de `limits.rs` y los límites del `Store`, comprobados con el propio `ResourceLimiter`;
   - las pruebas ubican los binarios junto a su propio ejecutable, porque cargo-mutants reutiliza un `target/` ya compilado.
 
-Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pruebas) y, desde `src-tauri/connector`, `cargo mutants --workspace` seguido de `node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json`. En CI, los jobs `Connector component`, `Connector mutation`, `Connector sandbox (Windows)` y `Connector enclosure mutation` son requisitos del `Quality gate`.
+Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pruebas) y, desde `src-tauri/connector`, `cargo mutants --workspace` seguido de `node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json`. En CI, los jobs `Connector component`, `Connector mutation`, `Connector worker mutation`, `Connector sandbox (Windows)` y `Connector enclosure mutation` son requisitos del `Quality gate`.
 
 ## Cinco factores
 

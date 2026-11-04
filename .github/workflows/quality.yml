@@ -153,6 +153,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # The worker's portable parts, with its test feature: a separate
+  # configuration, since Cargo refuses that feature for the other packages.
+  connector-worker-mutation:
+    name: Connector worker mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: cargo install cargo-mutants --locked --version 27.1.0
+      - run: cargo fetch --locked
+        working-directory: src-tauri/connector
+      - name: Unmutated worker tests build dependencies once
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: cargo test --locked -p nemein-connector --features test-worker
+      - name: 4 - Mutation score
+        working-directory: src-tauri/connector
+        env:
+          CARGO_NET_OFFLINE: "true"
+        run: |
+          status=0
+          cargo mutants --config .cargo/mutants-worker.toml --cargo-arg=--locked -j 3 || status=$?
+          test "$status" -eq 0 || test "$status" -eq 2
+          node ../../scripts/mutation-gate.js --cargo-mutants mutants.out/outcomes.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: mutation-report-connector-worker
+          path: src-tauri/connector/mutants.out/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # The real enclosure (AppContainer, Job, pipes) only exists on Windows.
   connector-windows:
     name: Connector sandbox (Windows)
@@ -261,6 +302,7 @@ jobs:
         mutation,
         connector,
         connector-mutation,
+        connector-worker-mutation,
         connector-windows,
         connector-windows-mutation-gate,
       ]
@@ -274,9 +316,10 @@ jobs:
           MUTATION: ${{ needs.mutation.result }}
           CONNECTOR: ${{ needs.connector.result }}
           CONNECTOR_MUTATION: ${{ needs.connector-mutation.result }}
+          CONNECTOR_WORKER_MUTATION: ${{ needs.connector-worker-mutation.result }}
           CONNECTOR_WINDOWS: ${{ needs.connector-windows.result }}
           CONNECTOR_WINDOWS_MUTATION: ${{ needs.connector-windows-mutation-gate.result }}
-        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success && test "$CONNECTOR_WINDOWS" = success && test "$CONNECTOR_WINDOWS_MUTATION" = success
+        run: test "$CHECKS" = success && test "$MUTATION" = success && test "$CONNECTOR" = success && test "$CONNECTOR_MUTATION" = success && test "$CONNECTOR_WORKER_MUTATION" = success && test "$CONNECTOR_WINDOWS" = success && test "$CONNECTOR_WINDOWS_MUTATION" = success
 
   native-static:
     name: Native static gate

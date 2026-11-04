@@ -192,6 +192,55 @@ test("cargo-mutants outcomes use the same gate, without unviable mutants", () =>
     );
 });
 
+test("cargo-mutants rejects a package of which no mutant was measured", () => {
+  const packaged = (rows) => ({
+    outcomes: [
+      { scenario: "Baseline", summary: "Success" },
+      ...rows.map(([pkg, summary], index) => ({
+        scenario: { Mutant: { name: "m" + index, package: pkg } },
+        summary,
+      })),
+    ],
+  });
+  // One package measured, another only unviable: a flag that did not apply.
+  assert.throws(
+    () =>
+      cargoMutantsReport(
+        packaged([
+          ["worker", "CaughtMutant"],
+          ["sdk", "Unviable"],
+          ["sdk", "Unviable"],
+        ]),
+      ),
+    /No mutant of sdk was measured/,
+  );
+  // Unviable mutants next to measured ones in the same package are fine,
+  // whatever their order.
+  for (const rows of [
+    [
+      ["sdk", "Unviable"],
+      ["sdk", "CaughtMutant"],
+    ],
+    [
+      ["sdk", "MissedMutant"],
+      ["sdk", "Unviable"],
+    ],
+  ])
+    assert.equal(
+      cargoMutantsReport(packaged(rows)).files["cargo-mutants"].mutants.length,
+      1,
+    );
+  // The check spans shards: each one judged on its own packages.
+  assert.throws(
+    () =>
+      cargoMutantsReport(
+        packaged([["sdk", "CaughtMutant"]]),
+        packaged([["tools", "Unviable"]]),
+      ),
+    /No mutant of tools was measured/,
+  );
+});
+
 test("cargo-mutants shards are judged as one run, each with its own baseline", () => {
   const killed = (n) => Array(n).fill("CaughtMutant");
   // 9 of 10 overall, though the second shard alone is at 80 %.

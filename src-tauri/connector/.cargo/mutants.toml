@@ -1,21 +1,16 @@
 # cargo-mutants over the connector decisions: account context, batch text,
-# identities, the example's mapping, the no-imports inspection and the
-# worker's portable parts (frames, protocol, run, supervisor, limits). The
-# Windows enclosure (worker/src/sandbox.rs, worker/src/main.rs) only runs on
-# Windows and is measured there.
-# scripts/mutation-gate.js --cargo-mutants requires 90 % and no timeouts.
+# identities, the example's mapping and the no-imports inspection. The worker
+# is measured with its own configurations: mutants-worker.toml (portable
+# parts, Linux) and mutants-windows.toml (enclosure, Windows). Its test
+# feature cannot be passed here: Cargo refuses it for these packages, and
+# every mutant would count as unviable.
+# scripts/mutation-gate.js --cargo-mutants requires 90 % and no timeouts, and
+# rejects a package none of whose mutants was measured.
 examine_globs = [
   "sdk/src/**/*.rs",
   "examples/fictitious-bank-csv/src/**/*.rs",
   "tools/src/**/*.rs",
-  "worker/src/frame.rs",
-  "worker/src/protocol.rs",
-  "worker/src/execute.rs",
-  "worker/src/supervise.rs",
-  "worker/src/limits.rs",
 ]
-# The supervisor tests drive the unenclosed test worker.
-features = ["nemein-connector/test-worker"]
 # Bindings are generated code from wit-bindgen; their mutants say nothing about ours.
 exclude_re = ["bindings::"]
 # Each build copy starts from the already compiled target/ (run the tests once

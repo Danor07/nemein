@@ -88,9 +88,10 @@ Estos jobs corren en el runner, no en el contenedor aislado del job Linux: Cargo
 
 ## Conectores WASM P3.2
 
-El trabajador encerrado agrega tres jobs, todos requeridos por `Quality gate`:
+El trabajador encerrado agrega cuatro jobs, todos requeridos por `Quality gate`:
 
-- `Connector component` y `Connector mutation` ya incluyen las partes portables de `nemein-connector`: tramas, protocolo, ejecución con wasmtime, supervisor y límites.
+- `Connector component` incluye las partes portables de `nemein-connector`: tramas, protocolo, ejecución con wasmtime, supervisor y límites.
+- `Connector worker mutation` las mide con cargo-mutants en Linux, con su propia configuración y la feature de prueba. Pasar esa feature en `Connector mutation` dejó sin medir el SDK, el ejemplo y la herramienta: Cargo la rechaza para esos paquetes y todos sus mutantes contaban como inviables. El verificador ahora rechaza un paquete del que no se midió ningún mutante.
 - `Connector sandbox (Windows)` corre en windows-2022: Clippy del encierro sin advertencias, las pruebas del encierro real y la cadena Node, supervisor y trabajador.
 - `Connector enclosure mutation` mide `sandbox.rs` y `main.rs` con cargo-mutants en cuatro shards de Windows. El job siguiente pasa los cuatro `outcomes.json` al mismo verificador, que los juzga como una sola corrida: mínimo 90 %, sin Timeout, Failure ni una línea base fallida en cualquiera de los shards.
 

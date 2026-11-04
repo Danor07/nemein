@@ -1,0 +1,18 @@
+# cargo-mutants over the worker's portable parts: frames, protocol, the run
+# inside wasmtime, the supervisor and the limits, on Linux. The enclosure
+# (worker/src/sandbox.rs, worker/src/main.rs) is measured on Windows with
+# mutants-windows.toml. The tests find the binaries next to their own
+# executable (tests/common::bin), so each mutant is judged by its own build.
+examine_globs = [
+  "worker/src/frame.rs",
+  "worker/src/protocol.rs",
+  "worker/src/execute.rs",
+  "worker/src/supervise.rs",
+  "worker/src/limits.rs",
+]
+# The supervisor tests drive the unenclosed test worker.
+features = ["nemein-connector/test-worker"]
+exclude_re = ["bindings::"]
+copy_target = true
+# The first test run in each build copy compiles the guest components.
+minimum_test_timeout = 300

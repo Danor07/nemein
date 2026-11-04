@@ -26,6 +26,20 @@ export function cargoMutantsReport(...labs) {
     const baseline = outcomes.filter((o) => o.scenario === "Baseline");
     if (baseline.length !== 1 || baseline[0].summary !== "Success")
       throw Error("cargo-mutants baseline did not succeed");
+    // A package whose every mutant failed to build was not measured at all,
+    // for example when a cargo flag does not apply to it; reject the run.
+    const measured = new Map();
+    for (const o of outcomes) {
+      const pkg = o.scenario?.Mutant?.package;
+      if (typeof pkg !== "string") continue;
+      measured.set(
+        pkg,
+        (measured.get(pkg) ?? false) || o.summary !== "Unviable",
+      );
+    }
+    for (const [pkg, any] of measured)
+      if (!any)
+        throw Error(`No mutant of ${pkg} was measured: every one is unviable`);
     return outcomes
       .filter((o) => o.scenario !== "Baseline" && o.summary !== "Unviable")
       .map((o) => ({
