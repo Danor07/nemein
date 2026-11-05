@@ -1063,6 +1063,13 @@ test("without a valid signature, enabling needs the owner's explicit acknowledge
 
 test("a signature given when reinstalling replaces the stored one and keeps the enablement", async (t) => {
   const { b, run } = fixture(t);
+  // Another connector, untouched by what follows.
+  const untouched = (
+    await b.installConnector({
+      component_base64: base64("otro componente ficticio"),
+      signature: null,
+    })
+  ).hash;
   const hash = (
     await b.installConnector({ component_base64: base64(component) })
   ).hash;
@@ -1085,8 +1092,10 @@ test("a signature given when reinstalling replaces the stored one and keeps the 
     signature: signatureFor(component, other),
   });
   assert.notEqual(replaced.signature.key, added.signature.key);
-  assert.equal(b.listConnectors().length, 1);
-  assert.equal(b.listConnectors()[0].enabled, true);
+  const listed = Object.fromEntries(b.listConnectors().map((c) => [c.hash, c]));
+  assert.deepEqual(Object.keys(listed).sort(), [hash, untouched].sort());
+  assert.equal(listed[hash].enabled, true);
+  assert.equal(listed[untouched].signature.status, "absent");
   // A malformed signature file is refused before anything runs.
   const calls = run.calls.length;
   for (const signature of ["{", { x: 1 }, "x".repeat(5000)])
@@ -1095,7 +1104,7 @@ test("a signature given when reinstalling replaces the stored one and keeps the 
       coded("CONNECTOR_REQUEST_INVALID"),
     );
   assert.equal(run.calls.length, calls);
-  assert.equal(b.listConnectors().length, 1);
+  assert.equal(b.listConnectors().length, 2);
 });
 
 test("an inventory with a damaged signature fails closed", async (t) => {
@@ -1167,7 +1176,7 @@ test("the screen reads a batch back only for its actor, with duplicates marked",
   });
   // Now in the budget: the other batch shows its rows as duplicates.
   assert.ok(b.connectorBatch({ id: second.id }).rows.every((r) => r.duplicate));
-  for (const id of ["otro", 7, undefined])
+  for (const id of ["otro", 7, undefined, {}, [first.id]])
     assert.throws(
       () => b.connectorBatch({ id }),
       coded("CONNECTOR_BATCH_UNKNOWN"),

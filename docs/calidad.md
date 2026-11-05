@@ -137,7 +137,12 @@ Dos alcances nuevos de Stryker, en la matriz de mutación de CI, con el mismo m�
 - **`connector-signature`:** `src/connector-signature.js` y `scripts/connector-sign.js`. Resultado: **100 %** (192 de 192), sin timeouts, errores ni mutantes sin cobertura.
 - **`connector-screen`:** el script de la página (`public/connectors.js`) y las rutas, el tope de la instalación, el aviso de plataforma y la lectura de la pantalla en `src/server.js`. Resultado: **100 %** (147 de 147), sin timeouts, errores ni mutantes sin cobertura.
 
-El alcance `connectors` suma la revisión del lote, la firma en el inventario y la confirmación sin firma válida, y en `src/access.js` el resumen del archivo en la auditoría. Resultado: CONNECTORS.
+El alcance `connectors` suma la revisión del lote, la firma en el inventario y la confirmación sin firma válida, y en `src/access.js` el resumen del archivo en la auditoría. Resultado: **98,70 %** (533 de 540), sin timeouts. Después se agregaron pruebas para tres sobrevivientes nuevos, y se comprobó a mano que cada una los mata:
+- reinstalar con firma cuando hay otro conector;
+- un `id` que no es texto;
+- `signature: null`.
+
+Quedan cuatro equivalentes: la bandera `wx` (2) y `utf8` (1), ya descritos en P3.3, y el `?.` del resumen de auditoría, porque ninguna llamada a `audit` recibe argumentos nulos. La CI vuelve a medir el alcance.
 
 Mediciones rechazadas y lo que se corrigió:
 - **La pantalla dio 36,30 %.** `public/connectors.js` corre en un `vm` nuevo, que no veía qué mutante estaba activo: todos se comportaban como el original. La prueba ahora le pasa `__STRYKER_ACTIVE_MUTANT__`, como la de `mcp-download.js`.
