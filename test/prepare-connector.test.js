@@ -46,6 +46,8 @@ test("connector build: production binary only, copied with Tauri's sidecar name"
     const workspace = path.join(f.root, "src-tauri", "connector");
     assert.deepEqual(f.calls, [
       { command: "rustc", args: ["-vV"], cwd: workspace },
+      // The license notices read the whole workspace's metadata offline.
+      { command: "cargo", args: ["fetch", "--locked"], cwd: workspace },
       {
         command: "cargo",
         args: [
@@ -62,7 +64,7 @@ test("connector build: production binary only, copied with Tauri's sidecar name"
     ]);
     // Never the test double, its probe or the test-worker feature.
     assert.ok(
-      !f.calls[1].args.some((a) =>
+      !f.calls[2].args.some((a) =>
         /feature|test|probe|all-targets|bins/.test(a),
       ),
     );
