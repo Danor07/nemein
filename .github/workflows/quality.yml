@@ -356,6 +356,10 @@ jobs:
         run: |
           $nemeinVersion = (Get-Content package.json | ConvertFrom-Json).version
           ./scripts/smoke-installed.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe" -ConnectorComponent "$env:RUNNER_TEMP\example-connector.wasm"
+      - name: Upgrade over the published 0.4.0 installer with fictitious data
+        run: |
+          $nemeinVersion = (Get-Content package.json | ConvertFrom-Json).version
+          ./scripts/smoke-upgrade.ps1 -InstallerPath "./src-tauri/target/release/bundle/nsis/Nemein_$($nemeinVersion)_x64-setup.exe"
 
   linux-native:
     name: Linux native check

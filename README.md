@@ -8,23 +8,24 @@ Versión experimental. Código abierto bajo licencia MIT.
 
 ## Descargar e instalar en Windows
 
-Descargá [Nemein 0.4.0](https://github.com/Danor07/nemein/releases/tag/v0.4.0): el archivo `Nemein-0.4.0-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
+Descargá [Nemein 0.5.0](https://github.com/Danor07/nemein/releases/tag/v0.5.0): el archivo `Nemein-0.5.0-windows-x64-selfsigned-setup.exe`, para Windows x64 con WebView2. Incluye Node.js y sus dependencias.
 
 - **Instalá con doble clic desde el Explorador.** Si el instalador se abre desde una terminal de una app empaquetada (MSIX), como Codex, Windows lo instala dentro de la carpeta privada de esa app: el acceso del menú Inicio no funciona y la desinstalación no aparece en el sistema.
-- El ejecutable y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mostrar advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
+- El ejecutable, el trabajador de conectores y el instalador están firmados con un certificado autofirmado de Innova-tech y sello de tiempo. Windows puede mostrar advertencias de editor desconocido o SmartScreen. La descarga no instala el certificado como raíz de confianza. Ver [firma de código](SIGNING.md).
 - `SHA256SUMS.txt` permite comprobar el instalador y el certificado público. Los archivos no incluyen presupuestos ni configuraciones personales.
 
-### Novedades de 0.4.0
+### Novedades de 0.5.0
 
-- Revisiones periódicas con permisos propios, inmutables una vez guardadas ([revisiones](docs/revisiones.md)).
-- Respaldos pedidos hacia una carpeta externa con `BUDGET_BACKUP_DIR`, sin bloquear el arranque ([respaldos](docs/respaldos.md)).
-- Contrato de importación único v1, con el CSV como primer productor y sin cambios de comportamiento ([importaciones](docs/importaciones.md)).
-- Node.js incluido actualizado a 22.23.4 por seguridad, y horas en la zona y el formato del sistema.
+- Conectores WASM encerrados en Windows, administrados desde la pantalla **Conectores**, con SDK y conector de ejemplo ([conectores](docs/conectores.md)).
+- Importación de extractos OFX y camt.053 sobre el contrato de importación v1 ([importaciones](docs/importaciones.md)).
+- API HTTP local opcional, con OpenAPI y eventos SSE, y los mismos permisos que CLI y MCP ([API local](docs/api-local.md)).
+- Permisos agrupados por conexión, guardados de una vez y sin recargar.
 
 ### Actualizar
 
 Antes de actualizar, guardá una copia de la carpeta de datos (ver [Dónde están tus datos](#dónde-están-tus-datos)). Las migraciones son numeradas y transaccionales, y conservan los datos de las bases anteriores ([migraciones](docs/migraciones.md)).
 
+- **Desde 0.4.0:** las conexiones siguen siendo compatibles. La migración 7 agrega los lotes de conectores; las acciones de conectores empiezan negadas. Para volver a 0.4.0 hace falta la copia anterior a actualizar.
 - **Desde 0.3.0:** las conexiones siguen siendo compatibles. La migración 6 agrega las revisiones; sus acciones empiezan negadas.
 - **Desde 0.2.1 o anterior:** la configuración MCP ya no contiene el token, sino la ruta a una credencial privada. Renová la conexión en **Permisos y propuestas** y volvé a enlazar tu cliente. El generador de configuración MCP rechaza rutas dentro de MSIX; también se corrige el rechazo de formularios con «Origen no permitido».
 - **Desde 0.2.2:** las conexiones siguen siendo compatibles. La nueva acción export empieza negada; habilitala expresamente si querés exportar datos.
