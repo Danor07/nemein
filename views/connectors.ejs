@@ -1,0 +1,36 @@
+<%
+const screen = connectors;
+const signatureLabel = { valid: 'Firma válida', invalid: 'Firma inválida', absent: 'Sin firma' };
+const signatureReason = { format: 'El archivo de firma no tiene el formato de Nemein.', component: 'La firma es de otro componente.', signature: 'La firma no corresponde a estos bytes con esa clave.' };
+const short = (hash) => hash.slice(0, 12) + '…' + hash.slice(-8);
+const enabledList = screen.list.filter((c) => c.enabled);
+const accountName = (id) => accounts.find((a) => a.id === id)?.name || 'Cuenta ' + id;
+const categoryName = (id) => id === null ? 'Sin categoría (ingreso)' : (categories.find((c) => c.id === id)?.name || 'Categoría ' + id);
+%>
+<div class="page-title"><div><span class="eyebrow">Importar con conectores</span><h1>Conectores</h1><p>Un conector convierte el extracto de tu banco en movimientos. Corre encerrado, sin red ni acceso a tus archivos, y sólo ve el archivo que elegís. Nada se guarda hasta que confirmás.</p></div></div>
+<% if(!screen.runs){ %><div class="error" role="status" data-connectors-unsupported><strong>En este sistema los conectores no corren.</strong> Sólo corren en Windows, dentro de su encierro. En Linux no corren hasta tener un encierro equivalente: no se pueden instalar ni ejecutar. Podés revocar los que figuren abajo.</div><% } %>
+<% if(screen.error){ %><div class="error" role="alert"><%= screen.error %></div><% } %>
+<% if(screen.review){ const review = screen.review; %>
+<section class="panel" id="connector-review">
+<% if(review.confirmed){ %><h2>Este lote ya se confirmó</h2><p>Se agregaron <%= review.result.added %> movimientos y <%= review.result.duplicates %> ya existían.</p><a class="button secondary" href="/?view=connectors">Volver a conectores</a>
+<% }else{ %><h2>Revisá antes de importar</h2><p><%= review.rows.length %> movimientos para <strong><%= accountName(review.account_id) %></strong> · <%= review.rows.filter((r) => r.duplicate).length %> ya importados, que se omitirán. Este lote vence el <%= displayTime(review.expires_at) %>.</p><p class="footnote">Se importa exactamente lo que ves: el conector no vuelve a correr y sus categorías no se usan.</p>
+<form method="post" action="/action/connector-import"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="connectors"><input type="hidden" name="id" value="<%= review.id %>"><input type="hidden" name="batch_sha256" value="<%= review.batch_sha256 %>"><button>Confirmar importación</button> <a class="button secondary" href="/?view=connectors">Cancelar</a></form>
+<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Beneficiario</th><th>Importe</th><th>Categoría</th><th>Estado</th></tr></thead><tbody><% for(const r of review.rows){ %><tr><td><%= displayDate(r.date) %></td><td><%= r.payee %></td><td class="numeric"><%= gs(r.amount) %></td><td><%= categoryName(r.category_id) %></td><td><%= r.duplicate ? 'Ya importado' : 'Nuevo' %></td></tr><% } %></tbody></table></div><% } %>
+</section><% } %>
+<section class="panel spaced"><h2>Instalados</h2>
+<% if(!screen.list.length){ %><p>No hay conectores instalados.</p><% } %>
+<% for(const c of screen.list){ %><article class="proposal-card" id="connector-<%= c.hash %>"><h3><%= c.manifest.name %> <span class="footnote"><%= c.manifest.version %></span></h3><p><%= c.manifest.description %></p>
+<p><strong><%= c.enabled ? 'Habilitado' : c.invalidated ? 'Deshabilitado: su habilitación no es de este historial' : 'Deshabilitado' %></strong> · <span data-signature="<%= c.signature.status %>"><%= signatureLabel[c.signature.status] %></span><% if(c.signature.key){ %> · clave <code><%= short(c.signature.key) %></code><% } %></p>
+<% if(c.signature.reason){ %><p class="footnote"><%= signatureReason[c.signature.reason] %></p><% } %>
+<p class="footnote"><%= c.manifest.id %> · <code title="<%= c.hash %>"><%= short(c.hash) %></code> · <%= Math.ceil(c.size / 1024) %> KiB · instalado el <%= displayTime(c.installed_at) %></p>
+<div class="row-actions"><% if(c.enabled){ %><form method="post" action="/action/connector-revoke" data-confirm="¿Revocar <%= c.manifest.name %>? Deja de ejecutarse hasta que lo habilites de nuevo."><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="connectors"><input type="hidden" name="hash" value="<%= c.hash %>"><button class="secondary">Revocar</button></form>
+<% }else if(screen.runs){ %><form method="post" action="/action/connector-enable"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="view" value="connectors"><input type="hidden" name="hash" value="<%= c.hash %>"><% if(c.signature.status !== 'valid'){ %><label class="check-label"><input type="checkbox" name="acknowledge_unsigned" value="yes" required> Entiendo que no tiene una firma válida y lo habilito igual.</label> <% } %><button>Habilitar</button></form><% } %></div></article><% } %>
+</section>
+<% if(screen.runs){ %>
+<section class="panel spaced"><h2>Importar con un conector</h2>
+<% if(!enabledList.length || !accounts.length){ %><p><%= accounts.length ? 'Habilitá un conector para importar con él.' : 'Agregá una cuenta antes de importar.' %></p><% }else{ %>
+<form id="connector-prepare-form" class="form-grid" data-csrf="<%= csrf %>"><label>Conector<select name="hash" required><% for(const c of enabledList){ %><option value="<%= c.hash %>"><%= c.manifest.name %> <%= c.manifest.version %></option><% } %></select></label><label>Cuenta de destino<select name="account_id" required><% for(const a of accounts){ %><option value="<%= a.id %>"><%= a.name %></option><% } %></select></label><label>Categoría inicial para gastos sin memoria<select name="category_id"><option value="">Elegí una categoría</option><% for(const c of categories){ %><option value="<%= c.id %>"><%= c.name %></option><% } %></select></label><label>Archivo del banco<input type="file" id="connector-input" required></label><label>Configuración (opcional)<input name="config" maxlength="16384" placeholder="Sólo si el conector la pide"></label><button>Preparar revisión</button></form><p role="status" aria-live="polite" class="footnote" id="connector-prepare-status">El conector corre una sola vez. Después revisás el resultado.</p><% } %>
+</section>
+<section class="panel spaced"><h2>Instalar un conector</h2><p>Se instala deshabilitado. La firma informa quién lo firmó; no lo bloquea. Sin una firma válida, habilitarlo pide una confirmación aparte.</p>
+<form id="connector-install-form" class="form-grid" data-csrf="<%= csrf %>"><label>Componente (.wasm)<input type="file" id="connector-component" accept=".wasm" required></label><label>Firma (opcional, .json)<input type="file" id="connector-signature" accept=".json"></label><button>Instalar</button></form><p role="status" aria-live="polite" class="footnote" id="connector-install-status">Hasta 16 MiB. Instalar ejecuta su descripción dentro del encierro.</p>
+</section><% } %>

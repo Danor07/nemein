@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -13,7 +14,8 @@ import os from "node:os";
 import path from "node:path";
 import { openBudget } from "../src/core.js";
 import { LIMITS } from "../src/connector-runner.js";
-import { CONNECTOR_LIMITS, decodeBase64 } from "../src/connectors.js";
+import { CONNECTOR_LIMITS, decodeBase64, sha256 } from "../src/connectors.js";
+import { signComponent } from "../src/connector-signature.js";
 import {
   base64,
   batchFor,
@@ -66,7 +68,7 @@ async function installed(b) {
   const entry = await b.installConnector({
     component_base64: base64(component),
   });
-  b.enableConnector({ hash: entry.hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash: entry.hash });
   return entry.hash;
 }
 const audits = (b, action) =>
@@ -113,7 +115,7 @@ test("install describes the component enclosed, stores it by hash and lists it d
   assert.equal(b.listConnectors().length, 1);
   assert.equal(run.calls[1].accountId, "1", "describe names a valid account");
   const installedRow = {
-    args: { hash: entry.hash, manifest },
+    args: { hash: entry.hash, manifest, signature: "absent" },
     decision: "allow",
     reason: "Conector instalado, deshabilitado",
   };
@@ -508,7 +510,7 @@ test("a revoked or changed connector stops; so does an expired batch", async (t)
     prepare(b, hash, accountId, { category_id: category }),
     coded("CONNECTOR_DISABLED"),
   );
-  b.enableConnector({ hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash });
   // The artifact changes on disk after its approval.
   const file = path.join(dir, "connectors", hash, "component.wasm");
   writeFileSync(file, Buffer.from("otro componente"));
@@ -574,13 +576,16 @@ test("enabling and revoking touch only their connector; audit rows record each s
     Object.fromEntries(
       b.listConnectors().map((e) => [e.hash, [e.enabled, e.invalidated]]),
     );
-  assert.deepEqual(b.enableConnector({ hash: a }), { hash: a, enabled: true });
+  assert.deepEqual(b.enableConnector({ acknowledge_unsigned: true, hash: a }), {
+    hash: a,
+    enabled: true,
+  });
   assert.deepEqual(state(), { [a]: [true, false], [c]: [false, false] });
   const token = (hash) =>
     inventoryOf(dir).connectors.find((e) => e.hash === hash).enablement.token;
   const tokenA = token(a);
   assert.match(tokenA, /^[0-9a-f]{64}$/);
-  b.enableConnector({ hash: c });
+  b.enableConnector({ acknowledge_unsigned: true, hash: c });
   assert.notEqual(token(c), tokenA, "every enablement has its own token");
   assert.deepEqual(b.revokeConnector({ hash: c }), { hash: c, enabled: false });
   // A later revocation of another connector leaves this one enabled.
@@ -588,7 +593,7 @@ test("enabling and revoking touch only their connector; audit rows record each s
   await prepare(b, a, accountId, { category_id: category });
   assert.deepEqual(trail(b, "connector-enable"), [
     {
-      args: { hash: a, token: tokenA },
+      args: { hash: a, token: tokenA, signature: "absent" },
       decision: "allow",
       reason: "Conector habilitado",
     },
@@ -596,6 +601,7 @@ test("enabling and revoking touch only their connector; audit rows record each s
       args: {
         hash: c,
         token: JSON.parse(audits(b, "connector-enable")[1].args).token,
+        signature: "absent",
       },
       decision: "allow",
       reason: "Conector habilitado",
@@ -643,7 +649,7 @@ test("an inventory copied back after a revocation does not undo it", async (t) =
     coded("CONNECTOR_DISABLED"),
   );
   // Enabling again is a new audit row after the revocation: it holds.
-  b.enableConnector({ hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash });
   await prepare(b, hash, accountId, { category_id: category });
 });
 
@@ -895,7 +901,7 @@ test("recovery: a restored backup does not revive an enablement; a copied folder
   });
   const before = path.join(dir, "antes.db");
   await b.db.backup(before);
-  b.enableConnector({ hash: entry.hash });
+  b.enableConnector({ acknowledge_unsigned: true, hash: entry.hash });
   const after = path.join(dir, "despues.db");
   await b.db.backup(after);
   b.close();
@@ -939,7 +945,7 @@ test("recovery: a restored backup does not revive an enablement; a copied folder
   );
   t.after(() => rmSync(otherDir, { recursive: true, force: true }));
   const first = reopen();
-  first.enableConnector({ hash: entry.hash });
+  first.enableConnector({ acknowledge_unsigned: true, hash: entry.hash });
   first.close();
   cpSync(path.join(dir, "connectors"), path.join(otherDir, "connectors"), {
     recursive: true,
@@ -991,4 +997,250 @@ test("a damaged inventory fails closed and is not overwritten", async (t) => {
     assert.equal(readFileSync(file, "utf8"), damaged);
   }
   assert.ok(existsSync(path.join(dir, "connectors", hash, "component.wasm")));
+});
+
+const signer = generateKeyPairSync("ed25519").privateKey;
+const signatureFor = (bytes, key = signer) => signComponent(sha256(bytes), key);
+
+test("without a valid signature, enabling needs the owner's explicit acknowledgement", async (t) => {
+  const { b, accountId, category } = fixture(t);
+  const signedBytes = Buffer.from("componente firmado ficticio");
+  const wrong = Buffer.from("componente con firma ajena");
+  const unsigned = (
+    await b.installConnector({ component_base64: base64(component) })
+  ).hash;
+  const valid = await b.installConnector({
+    component_base64: base64(signedBytes),
+    signature: JSON.stringify(signatureFor(signedBytes)),
+  });
+  // A signature of another component informs, and is kept.
+  const invalid = await b.installConnector({
+    component_base64: base64(wrong),
+    signature: signatureFor(component),
+  });
+  assert.equal(valid.signature.status, "valid");
+  assert.match(valid.signature.key, /^[0-9a-f]{64}$/);
+  assert.deepEqual(
+    { status: invalid.signature.status, reason: invalid.signature.reason },
+    { status: "invalid", reason: "component" },
+  );
+  const before = audits(b, "connector-enable").length;
+  for (const hash of [unsigned, invalid.hash])
+    for (const acknowledge_unsigned of [undefined, false, "yes", 1])
+      assert.throws(
+        () => b.enableConnector({ hash, acknowledge_unsigned }),
+        (e) =>
+          coded("CONNECTOR_SIGNATURE_UNACKNOWLEDGED")(e) &&
+          /firma válida/.test(e.message),
+      );
+  assert.ok(
+    audits(b, "connector-enable")
+      .slice(before)
+      .every((a) => a.decision === "error"),
+    "a refused enablement leaves no row that holds",
+  );
+  assert.ok(b.listConnectors().every((c) => !c.enabled));
+  // A valid signature enables as before; the others with the acknowledgement.
+  b.enableConnector({ hash: valid.hash });
+  b.enableConnector({ hash: unsigned, acknowledge_unsigned: true });
+  b.enableConnector({ hash: invalid.hash, acknowledge_unsigned: true });
+  assert.deepEqual(
+    trail(b, "connector-enable")
+      .filter((a) => a.decision === "allow")
+      .map((a) => [a.args.hash, a.args.signature]),
+    [
+      [valid.hash, "valid"],
+      [unsigned, "absent"],
+      [invalid.hash, "invalid"],
+    ],
+  );
+  assert.deepEqual(
+    trail(b, "connector-install").map((a) => a.args.signature),
+    ["absent", "valid", "invalid"],
+  );
+  await prepare(b, valid.hash, accountId, { category_id: category });
+});
+
+test("a signature given when reinstalling replaces the stored one and keeps the enablement", async (t) => {
+  const { b, run } = fixture(t);
+  // Another connector, untouched by what follows.
+  const untouched = (
+    await b.installConnector({
+      component_base64: base64("otro componente ficticio"),
+      signature: null,
+    })
+  ).hash;
+  const hash = (
+    await b.installConnector({ component_base64: base64(component) })
+  ).hash;
+  b.enableConnector({ hash, acknowledge_unsigned: true });
+  const added = await b.installConnector({
+    component_base64: base64(component),
+    signature: signatureFor(component),
+  });
+  assert.equal(added.signature.status, "valid");
+  assert.equal(added.enabled, true, "the enablement belongs to the bytes");
+  // Without a signature, reinstalling keeps the stored one.
+  const again = await b.installConnector({
+    component_base64: base64(component),
+  });
+  assert.deepEqual(again.signature, added.signature);
+  // Another key replaces it.
+  const other = generateKeyPairSync("ed25519").privateKey;
+  const replaced = await b.installConnector({
+    component_base64: base64(component),
+    signature: signatureFor(component, other),
+  });
+  assert.notEqual(replaced.signature.key, added.signature.key);
+  const listed = Object.fromEntries(b.listConnectors().map((c) => [c.hash, c]));
+  assert.deepEqual(Object.keys(listed).sort(), [hash, untouched].sort());
+  assert.equal(listed[hash].enabled, true);
+  assert.equal(listed[untouched].signature.status, "absent");
+  // A malformed signature file is refused before anything runs.
+  const calls = run.calls.length;
+  for (const signature of ["{", { x: 1 }, "x".repeat(5000)])
+    await assert.rejects(
+      b.installConnector({ component_base64: base64("otro"), signature }),
+      coded("CONNECTOR_REQUEST_INVALID"),
+    );
+  assert.equal(run.calls.length, calls);
+  assert.equal(b.listConnectors().length, 2);
+});
+
+test("an inventory with a damaged signature fails closed", async (t) => {
+  const { b, dir } = fixture(t);
+  await b.installConnector({
+    component_base64: base64(component),
+    signature: signatureFor(component),
+  });
+  const file = path.join(dir, "connectors", "inventory.json");
+  const inventory = inventoryOf(dir);
+  assert.equal(
+    inventory.connectors[0].signature.format,
+    "nemein-connector-signature",
+  );
+  // Written before signatures: the field is absent, and the entry is unsigned.
+  delete inventory.connectors[0].signature;
+  writeFileSync(file, JSON.stringify(inventory));
+  assert.equal(b.listConnectors()[0].signature.status, "absent");
+  inventory.connectors[0].signature = { format: "otra" };
+  writeFileSync(file, JSON.stringify(inventory));
+  assert.throws(() => b.listConnectors(), coded("CONNECTOR_INVENTORY_INVALID"));
+});
+
+test("the screen reads a batch back only for its actor, with duplicates marked", async (t) => {
+  const { b, accountId, category } = fixture(t);
+  const hash = await installed(b);
+  const first = await prepare(b, hash, accountId, { category_id: category });
+  const review = b.connectorBatch({ id: first.id });
+  assert.deepEqual(
+    {
+      id: review.id,
+      batch_sha256: review.batch_sha256,
+      expires_at: review.expires_at,
+      account_id: review.account_id,
+      connector: review.connector,
+      confirmed: review.confirmed,
+    },
+    {
+      id: first.id,
+      batch_sha256: first.batch_sha256,
+      expires_at: first.expires_at,
+      account_id: accountId,
+      connector: hash,
+      confirmed: false,
+    },
+  );
+  // The same rows the preparation answered.
+  assert.deepEqual(
+    review.rows,
+    first.rows.map((r) => ({
+      date: r.date,
+      payee: r.payee,
+      amount: r.amount,
+      category_id: r.category_id,
+      import_key: r.import_key,
+      duplicate: r.duplicate,
+    })),
+  );
+  const second = await prepare(b, hash, accountId, { category_id: category });
+  b.confirmConnectorImport({ id: first.id, batch_sha256: first.batch_sha256 });
+  assert.deepEqual(b.connectorBatch({ id: first.id }), {
+    id: first.id,
+    batch_sha256: first.batch_sha256,
+    expires_at: first.expires_at,
+    account_id: accountId,
+    connector: hash,
+    confirmed: true,
+    result: { added: 5, duplicates: 0 },
+  });
+  // Now in the budget: the other batch shows its rows as duplicates.
+  assert.ok(b.connectorBatch({ id: second.id }).rows.every((r) => r.duplicate));
+  for (const id of ["otro", 7, undefined, {}, [first.id]])
+    assert.throws(
+      () => b.connectorBatch({ id }),
+      coded("CONNECTOR_BATCH_UNKNOWN"),
+    );
+  assert.throws(() => b.connectorBatch(), coded("CONNECTOR_BATCH_UNKNOWN"));
+  // An agent's batch is not the owner's to read.
+  const connection = b.createConnection({ label: "Agente ficticio" });
+  b.setRule({
+    connection_id: connection.id,
+    action: "connector-prepare",
+    decision: "allow",
+    conditions: {},
+  });
+  const theirs = await b.forAgent(connection.token).prepareConnectorImport({
+    hash,
+    account_id: accountId,
+    content_base64: base64(statement),
+    category_id: category,
+  });
+  assert.throws(
+    () => b.connectorBatch({ id: theirs.id }),
+    coded("CONNECTOR_BATCH_UNKNOWN"),
+  );
+});
+
+test("the audit keeps the digest and size of a prepared file, not its content", async (t) => {
+  const { b, accountId, category } = fixture(t);
+  const hash = await installed(b);
+  const owner = await prepare(b, hash, accountId, { category_id: category });
+  const connection = b.createConnection({ label: "Agente ficticio" });
+  b.setRule({
+    connection_id: connection.id,
+    action: "connector-prepare",
+    decision: "allow",
+    conditions: {},
+  });
+  const agent = await b.forAgent(connection.token).prepareConnectorImport({
+    hash,
+    account_id: accountId,
+    content_base64: base64(statement),
+    category_id: category,
+  });
+  const rows = audits(b, "connector-prepare");
+  assert.equal(rows.length, 2);
+  const input = b.db
+    .prepare("SELECT input_hash FROM connector_batches WHERE id=?")
+    .get(owner.id).input_hash;
+  assert.equal(
+    b.db
+      .prepare("SELECT input_hash FROM connector_batches WHERE id=?")
+      .get(agent.id).input_hash,
+    input,
+  );
+  for (const row of rows) {
+    const args = JSON.parse(row.args);
+    assert.deepEqual(args.content_base64, {
+      sha256: input,
+      bytes: statement.length,
+    });
+    assert.equal(args.hash, hash);
+    assert.equal(args.account_id, accountId);
+    assert.ok(!row.args.includes(base64(statement)));
+  }
+  // Other actions keep their arguments as they were.
+  const enable = JSON.parse(audits(b, "connector-enable")[0].args);
+  assert.equal(enable.hash, hash);
 });

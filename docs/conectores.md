@@ -2,12 +2,12 @@
 
 Un conector es una función pura: recibe los bytes de un archivo que eligió el propietario y devuelve un [lote de importación v1](importaciones.md). Corre aparte, sin acceso al presupuesto, y su salida nunca escribe por sí misma: el anfitrión la valida y la pasa por la revisión y la confirmación protegida.
 
-**Estado.** P3.1 fijó el contrato y la receta. P3.2 agregó el trabajador encerrado `nemein-connector`, su empaquetado y el ejecutor de Node (`src/connector-runner.js`). P3.3 agrega el flujo:
+**Estado.** P3.1 fijó el contrato y la receta. P3.2 agregó el trabajador encerrado `nemein-connector`, su empaquetado y el ejecutor de Node (`src/connector-runner.js`). P3.3 agregó el flujo:
 - instalación, habilitación y revocación por el propietario;
 - preparación, revisión y confirmación protegida del lote;
 - recuperación sin revivir habilitaciones.
 
-Todavía no hay pantalla: llega en P3.4, con la firma que informa. En Linux los conectores no corren hasta tener un encierro equivalente al de Windows: el binario y el ejecutor responden `UNSUPPORTED_PLATFORM`.
+P3.4 agrega la pantalla **Conectores** y la firma Ed25519 que informa. En Linux los conectores no corren hasta tener un encierro equivalente al de Windows: la pantalla lo dice, y el binario y el ejecutor responden `UNSUPPORTED_PLATFORM`.
 
 ## Mundo WIT
 
@@ -264,6 +264,65 @@ La recuperación soportada se hace en una carpeta nueva y vacía, sin copiar `co
 
 El ejecutor usa `NEMEIN_CONNECTOR_BIN`, que define el shell de escritorio. La CLI y el MCP instalados corren el `node.exe` de `<instalación>\runtime`, así que buscan `nemein-connector.exe` en la carpeta de instalación.
 
+## Pantalla y firma (P3.4)
+
+### Pantalla
+
+**Conectores**, en el menú, es del propietario: la ventana local, con el mismo CSRF y el mismo control de origen que el resto. No está en la API local, la CLI ni el MCP. Muestra:
+- **Dónde no corren.** Fuera de Windows, un aviso dice que los conectores no corren hasta tener un encierro equivalente. Ahí la pantalla no ofrece instalar ni preparar: sólo lista y revoca.
+- **Instalados.** Por cada conector: nombre, versión, descripción, si está habilitado o si su habilitación no es de este historial, la firma con la huella de su clave, el identificador, el hash, el tamaño y la fecha.
+- **Instalar.** El componente (`.wasm`, hasta 16 MiB) y, si hay, su archivo de firma. El navegador codifica el archivo en base64 (`FileReader`) y lo envía en JSON con `fetch`. Sólo esa ruta acepta un cuerpo de ese tamaño; las demás conservan el tope de 8 MB.
+- **Habilitar y revocar.** Sin una firma válida, habilitar pide marcar «Entiendo que no tiene una firma válida y lo habilito igual».
+- **Importar.** Se elige un conector habilitado, la cuenta, la categoría inicial para gastos sin memoria, el archivo del banco y, si el conector la pide, la configuración. La preparación guarda el lote y responde sólo su identificador.
+- **Revisar y confirmar.** La revisión es una página propia (`?view=connectors&batch=<id>`) que lee el lote guardado: no vuelve a ejecutar el conector y se puede recargar. Muestra cuenta, vencimiento y cada fila con su categoría y si ya está en el presupuesto. Confirmar envía el `id` y el `batch_sha256` que se vieron. Un lote ya confirmado muestra su resultado.
+
+Un inventario dañado, o un lote que no existe o es de otro actor, se muestran como mensaje: la página no falla.
+
+### Firma
+
+La firma dice que **el dueño de una clave Ed25519 firmó exactamente estos bytes**. No dice quién es esa persona: todavía no hay catálogo de autores ni continuidad de clave entre versiones. Por eso informa y no bloquea.
+
+El archivo de firma es JSON, de hasta 4 KiB, con exactamente estos campos:
+
+```json
+{
+  "format": "nemein-connector-signature",
+  "version": 1,
+  "algorithm": "ed25519",
+  "component_sha256": "<sha256 del componente>",
+  "public_key": "<32 bytes en base64 canónico>",
+  "signature": "<64 bytes en base64 canónico>"
+}
+```
+
+**Lo firmado** son los bytes de dominio de Nemein, `nemein:connector-signature:v1` seguido de un salto de línea, y a continuación los 32 bytes del SHA-256 del componente. Es la misma idea que el espacio de nombres de las firmas de SSH (`PROTOCOL.sshsig`): una firma de Nemein no vale como firma de otra cosa, y la firma de otro producto sobre el mismo hash no vale aquí.
+
+Estados que muestra la pantalla:
+- **Firma válida**, con la huella de la clave: el SHA-256 de los 32 bytes de la clave pública.
+- **Firma inválida**, con su motivo: de otro componente, o no corresponde a estos bytes con esa clave.
+- **Sin firma.**
+
+Reglas:
+- Un archivo de firma que no cumple el formato se rechaza al instalar, antes de ejecutar nada.
+- Una firma bien formada pero inválida se guarda y se informa.
+- Reinstalar los mismos bytes con otra firma reemplaza la guardada. Reinstalarlos sin firma la conserva.
+- La firma nunca toca la habilitación, que es de los bytes.
+- La fila de auditoría de instalar y la de habilitar registran el estado de la firma en ese momento.
+- Sin una firma válida, `enableConnector` exige `acknowledge_unsigned: true` (`CONNECTOR_SIGNATURE_UNACKNOWLEDGED`).
+
+Para autores, sin dependencias nuevas:
+
+```sh
+node scripts/connector-sign.js keygen clave.pem
+node scripts/connector-sign.js sign componente.wasm clave.pem componente.firma.json
+```
+
+`keygen` escribe una clave PKCS#8 legible sólo por su dueño, donde el sistema lo permite, y muestra la huella de la clave pública. Ningún comando sobrescribe un archivo. Nemein nunca necesita la clave privada.
+
+### Auditoría de los archivos
+
+La auditoría guarda los argumentos de cada solicitud. Para `connector-prepare` guarda, en lugar del `content_base64`, su SHA-256 y su tamaño en bytes. Ese hash es el mismo `input_hash` del lote preparado, así que la fila sigue identificando el archivo sin guardar su contenido. La importación CSV no cambia: sigue guardando su `content`.
+
 ## Pruebas y calidad
 
 - Regresión: formato, límites exactos (20.000 movimientos, 160 caracteres, 10^12), fechas, comillas, codificación, contexto, configuración y archivos de oro.
@@ -307,6 +366,22 @@ Las pruebas usan un sustituto del trabajador dentro del proceso (`test/helpers/c
 - **Migración 007:** actualización desde el esquema 6 con datos, reversión ante una tabla en conflicto y reapertura.
 - **Mutación:** el alcance `connectors` de Stryker mide este módulo, la inserción compartida y la administración del propietario, con mínimo del 90 % y sin timeouts. La medición está en [Control de calidad](calidad.md#conectores-wasm-p33).
 
+### Pruebas de la pantalla y la firma (P3.4)
+
+- **Pantalla por HTTP** (`test/connectors-http.test.js`):
+  - el menú y el aviso de plataforma; fuera de Windows no hay formularios;
+  - el valor por defecto sigue a la plataforma;
+  - el recorrido completo: instalar sin firma y con firma, habilitar con y sin la confirmación, preparar, revisar, confirmar, revisar de nuevo un lote confirmado, ver duplicados y revocar;
+  - el tope propio de la instalación frente al de las demás rutas;
+  - CSRF, origen, errores en JSON, un lote ajeno, un inventario dañado y una preparación que el conector rechaza.
+- **Script de la página** (`test/connectors-ui.test.js`), con un documento mínimo en `vm`: lo que envía, el base64 que arma el navegador, un archivo vacío o ilegible, los topes y sus bordes, los mensajes, los errores del servidor y de la red, que el botón vuelve a habilitarse y que cada envío termina dentro de un plazo.
+- **Firma:**
+  - regresión (`test/connector-signature.test.js`): los bytes de dominio, una firma sin dominio o con el de otro producto, otra clave, una clave que no es un punto de la curva, cada campo del formato y su tope en bytes, claves que no son Ed25519, y la herramienta de autores con sus códigos de salida;
+  - propiedad: una firma vale para su componente y su clave, y un bit cambiado en el componente, la clave o la firma la invalida;
+  - propiedad: otra clave sobre el mismo componente vale sólo con esa clave;
+  - fuzzing: cualquier archivo subido se informa sin lanzar, y su análisis sólo rechaza con `CONNECTOR_REQUEST_INVALID`.
+- **Flujo** (`test/connectors.test.js`): la confirmación explícita, también con valores que no son `true`; firmas ajenas que se guardan e informan; reinstalar con otra firma o sin ella; un inventario anterior a las firmas y uno con la firma dañada; la revisión del lote sólo para su actor; y la auditoría con hash y tamaño.
+
 ### Pruebas del trabajador encerrado
 
 - **Tramas y protocolo:** pruebas unitarias de cada largo en su tope y uno más, tramas truncadas, bytes de más y JSON con campos desconocidos. [frames.json](../src-tauri/connector/worker/fixtures/frames.json) tiene los vectores compartidos con Node.
@@ -341,4 +416,4 @@ Comandos locales: `npm run connector:check` (formato, Clippy nativo y wasm32, pr
 - **Responsabilidad:** el conector traduce un archivo a un lote; el anfitrión valida, deduplica, pide permisos y confirma.
 - **Contrato:** WIT `nemein:connector@1.0.0`, lote v1 y los límites de arriba.
 - **Pruebas de frontera:** sin imports, tipado al instanciar, archivos hostiles, oro entre Rust y Node, componentes hostiles dentro del encierro real, sonda nativa con control positivo, cierre en cadena y mutación.
-- **Desconexión:** el presupuesto no depende de esta carpeta. Sin conectores, CSV, OFX y CAMT siguen igual. En P3.2 nada de la aplicación llama al ejecutor; si falta el binario o el sistema no es Windows, el ejecutor falla cerrado con un código propio.
+- **Desconexión:** el presupuesto no depende de esta carpeta. Sin conectores, CSV, OFX y CAMT siguen igual. Si falta el binario o el sistema no es Windows, el ejecutor falla cerrado con un código propio, y la pantalla lo dice en lugar de ofrecer instalar.

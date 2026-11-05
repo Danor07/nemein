@@ -7,12 +7,12 @@ export default {
   mutate: [
     "src/local-api.js",
     "src/local-api-sse.js",
-    "src/access.js:171-171",
-    "src/access.js:203-210",
-    "src/access.js:714-729",
-    "src/server.js:17-19",
-    "src/server.js:415-416",
-    "src/server.js:10-10",
+    "src/access.js:178-178",
+    "src/access.js:210-217",
+    "src/access.js:721-736",
+    "src/server.js:20-22",
+    "src/server.js:485-486",
+    "src/server.js:13-13",
   ],
   commandRunner: {
     command:

@@ -6,7 +6,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { openBudget, today } from "./core.js";
+import { LIMITS } from "./connector-runner.js";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Connectors run only inside the Windows enclosure (docs/conectores.md).
+export const connectorsRunOn = (platform) => platform === "win32";
 export function createApp(budget, { installationRoots, localApi = process.env.BUDGET_LOCAL_API === "1" } = {}) {
   const app = express(),
     csrf = randomBytes(32).toString("hex"),
@@ -38,6 +41,12 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
       return res.status(403).send("Origen no permitido.");
     next();
   });
+  // A component reaches the screen as base64 inside JSON, up to 16 MiB of
+  // bytes: only this route takes a body that large.
+  app.use(
+    "/action/connector-install",
+    express.json({ limit: Math.ceil(LIMITS.component / 3) * 4 + 65536 }),
+  );
   app.use(express.urlencoded({ extended: false, limit: "8mb" }));
   app.use(express.json({ limit: "8mb" }));
   app.use((req, res, next) => {
@@ -120,6 +129,25 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
     });
   app.locals.today = today;
   app.locals.csrf = csrf;
+  app.locals.connectorsRun = connectorsRunOn(process.platform);
+  // The owner's connectors screen. A damaged inventory or a batch that is not
+  // the owner's shows its reason instead of failing the page.
+  const connectorScreen = (req) => {
+    const screen = {
+      runs: app.locals.connectorsRun,
+      list: [],
+      error: "",
+      review: null,
+    };
+    try {
+      screen.list = budget.listConnectors();
+      if (req.query.batch)
+        screen.review = budget.connectorBatch({ id: String(req.query.batch) });
+    } catch (e) {
+      screen.error = e.message;
+    }
+    return screen;
+  };
   const render = (req, res, extra = {}) => {
     const activeView = extra.view || req.query.view || "home";
     const m = extra.error
@@ -152,6 +180,7 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
       reviewList: activeView === "reviews" ? budget.listReviews({offset:Number(req.query.offset || 0)}) : null,
       reviewDetail: activeView === "reviews" && req.query.review ? budget.getReview({id:req.query.review}) : null,
       reviewConnections: activeView === "reviews" && req.query.review ? budget.accessState().connections : null,
+      connectors: activeView === "connectors" ? connectorScreen(req) : null,
       connectionConfig: null,
       exportId: "",
       demo: process.env.BUDGET_DEMO === "1",
@@ -364,6 +393,47 @@ export function createApp(budget, { installationRoots, localApi = process.env.BU
             );
           const result = budget.importCsv(pending);
           previews.delete(p.previewId);
+          return redirect(
+            req,
+            res,
+            `Se importaron ${result.added} movimientos. ${result.duplicates} ya existían.`,
+          );
+        }
+        case "connector-install": {
+          const installed = await budget.installConnector({
+            component_base64: p.component_base64,
+            signature: p.signature || undefined,
+          });
+          const notice =
+            installed.signature.status === "valid"
+              ? "Conector instalado y deshabilitado. Su firma es válida."
+              : "Conector instalado y deshabilitado. No tiene una firma válida: revisalo antes de habilitarlo.";
+          return res.json({ notice });
+        }
+        case "connector-enable":
+          budget.enableConnector({
+            hash: p.hash,
+            acknowledge_unsigned: p.acknowledge_unsigned === "yes",
+          });
+          return redirect(req, res, "Conector habilitado.");
+        case "connector-revoke":
+          budget.revokeConnector({ hash: p.hash });
+          return redirect(req, res, "Conector revocado: ya no se ejecuta.");
+        case "connector-prepare": {
+          const prepared = await budget.prepareConnectorImport({
+            hash: p.hash,
+            account_id: Number(p.account_id),
+            content_base64: p.content_base64,
+            config: p.config || undefined,
+            category_id: p.category_id ? Number(p.category_id) : undefined,
+          });
+          return res.json({ id: prepared.id });
+        }
+        case "connector-import": {
+          const result = budget.confirmConnectorImport({
+            id: p.id,
+            batch_sha256: p.batch_sha256,
+          });
           return redirect(
             req,
             res,

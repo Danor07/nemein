@@ -21,6 +21,13 @@ function json(value) {
     );
   return serialized;
 }
+// A file reaches connector actions as base64; the audit keeps its digest and
+// size, which match the prepared batch's input_hash, never its content.
+function auditArgs(args) {
+  if (typeof args?.content_base64 !== "string") return args;
+  const bytes = Buffer.from(args.content_base64, "base64");
+  return { ...args, content_base64: { sha256: hash(bytes), bytes: bytes.length } };
+}
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === "object")
@@ -51,7 +58,7 @@ export function attachAccess(budget) {
       new Date().toISOString(),
       actor,
       action,
-      json(args),
+      json(auditArgs(args)),
       decision,
       reason,
       reviewer,
@@ -793,7 +800,11 @@ export function attachAccess(budget) {
       audit(
         "owner",
         "connector-install",
-        { hash: result.hash, manifest: result.manifest },
+        {
+          hash: result.hash,
+          manifest: result.manifest,
+          signature: result.signature.status,
+        },
         "allow",
         "Conector instalado, deshabilitado",
       );
