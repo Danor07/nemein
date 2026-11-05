@@ -9,9 +9,26 @@ export function writeDesktopNotices(root, target) {
   fs.copyFileSync(nodeLicense, path.join(target, 'LICENSE-Node.txt'));
   const host = execFileSync('rustc',['-vV'],{encoding:'utf8',windowsHide:true}).match(/^host:\s*(\S+)/m)?.[1];
   if(!host) throw Error('No se pudo identificar la plataforma de Rust.');
-  const metadata = JSON.parse(execFileSync('cargo', ['metadata', '--locked', '--offline', '--filter-platform', process.env.CARGO_BUILD_TARGET || host, '--format-version', '1', '--manifest-path', path.join(root,'src-tauri','Cargo.toml')], {encoding:'utf8',maxBuffer:32*1024*1024,windowsHide:true}));
-  const sections = ['Third-party Rust dependency notices. Node notices are in LICENSE-Node.txt; JavaScript dependency licenses are included in node_modules.'];
-  for (const pkg of metadata.packages.filter(p=>p.source).sort((a,b)=>a.name.localeCompare(b.name))) {
+  const metadata = manifest => JSON.parse(execFileSync('cargo', ['metadata', '--locked', '--offline', '--filter-platform', process.env.CARGO_BUILD_TARGET || host, '--format-version', '1', '--manifest-path', manifest], {encoding:'utf8',maxBuffer:32*1024*1024,windowsHide:true}));
+  const shell = metadata(path.join(root,'src-tauri','Cargo.toml'));
+  // The connector workspace also holds the SDK, tools and fixtures, which are not shipped:
+  // only the worker binary's dependency closure is distributed.
+  const connector = metadata(path.join(root,'src-tauri','connector','Cargo.toml'));
+  const nodes = new Map(connector.resolve.nodes.map(n=>[n.id,n]));
+  const worker = connector.packages.find(p=>p.name==='nemein-connector' && !p.source);
+  if(!worker) throw Error('No se encontró el paquete del trabajador nemein-connector.');
+  const shipped = new Set(), pending = [worker.id];
+  while (pending.length) {
+    const id = pending.pop();
+    if (shipped.has(id)) continue;
+    shipped.add(id);
+    for (const dep of nodes.get(id)?.deps || []) if (dep.dep_kinds.some(k=>k.kind!=='dev')) pending.push(dep.pkg);
+  }
+  const packages = new Map();
+  for (const pkg of [...shell.packages, ...connector.packages.filter(p=>shipped.has(p.id))])
+    if (pkg.source) packages.set(`${pkg.name} ${pkg.version}`, pkg);
+  const sections = ['Third-party Rust dependency notices for the desktop shell and the nemein-connector worker. Node notices are in LICENSE-Node.txt; JavaScript dependency licenses are included in node_modules.'];
+  for (const pkg of [...packages.values()].sort((a,b)=>a.name.localeCompare(b.name) || a.version.localeCompare(b.version))) {
     const dir = path.dirname(pkg.manifest_path);
     const names = new Set(fs.readdirSync(dir).filter(name=>/^(LICENSE|LICENCE|COPYING|NOTICE)([._-]|$)/i.test(name)));
     if(pkg.license_file) names.add(pkg.license_file);

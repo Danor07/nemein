@@ -12,6 +12,9 @@ export function prepareConnector(root, run) {
   const workspace = path.join(root, "src-tauri", "connector");
   const triple = /^host: (\S+)$/m.exec(run("rustc", ["-vV"], workspace))?.[1];
   if (!triple) throw Error("No se pudo leer la plataforma de rustc.");
+  // The whole workspace, not only the worker: desktop-notices reads its
+  // metadata offline afterwards, and that resolves every member.
+  run("cargo", ["fetch", "--locked"], workspace);
   run(
     "cargo",
     [
